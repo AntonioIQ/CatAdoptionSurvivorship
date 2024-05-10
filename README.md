@@ -1,6 +1,6 @@
 # Análisis de Supervivencia en Adopciones de Gatos 🐱
 
-[cat-3169476_960_720.jpg]
+![Portada](cat-3169476_960_720.jpg)
 
 Este proyecto, realizado para la materia de Métodos Analíticos, investiga si el color del pelaje de un gato influye en el tiempo que tarda en ser adoptado en un refugio de animales. Utilizamos datos del refugio de Austin, Texas, y modelos de supervivencia para abordar esta pregunta.
 
