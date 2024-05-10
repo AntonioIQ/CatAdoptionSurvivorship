@@ -3,8 +3,8 @@ title: Análisis de Supervivencia con adopciones de gatos
 date: 2024-05-29
 authors:
   - Sara Luz valenzuela Camacho
-  - Gabriela
-  - José Antonio
+  - Gabriela Patricia Venegas Sánchez
+  - José Antonio Tapia Godínez
 ---
 
 # Proyecto Final
@@ -412,5 +412,208 @@ Tenemos datos de 22,356 gatos:
   * color (204 tipos) black
   * intake_age
 
-# 
+# ####
 
+#**Sin censura**
+
+```{r}
+library(tidyverse)
+library(cmdstanr)
+library(rstan)
+```
+Este modelo simplifica el análisis al considerar únicamente los gatos que fueron adoptados (eventos no censurados). Formalmente, asumimos que el tiempo hasta la adopción ($T_i$) para el gato $i$ sigue una distribución exponencial:
+
+$$T_i \sim \text{Exp}(\lambda_i)$$
+
+donde $\lambda_i$ es el parámetro de tasa de la distribución exponencial, que representa la tasa instantánea de adopción en cualquier momento.
+
+Para evaluar el efecto del color del pelaje, modelamos el logaritmo del parámetro de tasa como una función lineal del color:
+
+$$\log(\lambda_i) = -\alpha_{\text{color}_i}$$
+
+donde:
+$\alpha_{\text{color}i}$ es el intercepto específico para la categoría de color del gato $i$, representando el efecto del color del pelaje en la tasa de adopción. Un valor más alto de $\alpha{\text{color}_i}$ indica un tiempo de adopción más largo para esa categoría de color.
+
+En nuestro modelo, $\alpha$ es un vector de longitud $J$, donde $J$ es el número de categorías de color (en este caso, 2: negro y otros colores). Cada elemento de $\alpha$ representa el intercepto específico para una categoría de color.
+
+Empleamos un modelo bayesiano para estimar los parámetros $\alpha$, asignando distribuciones a priori y actualizando nuestras creencias con los datos observados (tiempos de adopción de los gatos adoptados) para obtener las distribuciones a posteriori.
+
+##Modelo generativo
+Sea $T$ los días que le toma a un gato ser adoptado, y $C$ el color de su pelaje, que puede ser negro o de otro tipo. Nuestro modelo generativo simplificado, que excluye los datos censurados, se puede representar de la siguiente manera:
+
+```{r}
+grViz("
+digraph {
+  graph [ranksep = 0.2, rankdir = LR]
+  node [shape = plaintext]
+  C -> T
+  {rank = same; C; T}
+}
+", width = 400)
+```
+En este modelo generativo:
+
+$T$ representa el tiempo hasta la adopción para un gato, siguiendo una distribución exponencial con parámetro de tasa $\lambda$.
+$C$ representa la categoría de color del pelaje del gato, que puede ser negro o de otro tipo.
+La flecha de $C$ a $T$ indica que el color del pelaje influye en el tiempo hasta la adopción.
+
+Asumimos que el tiempo hasta la adopción $T$ sigue una distribución exponencial:
+$$T \sim \text{Exp}(\lambda)$$
+donde $\lambda$ es el parámetro de tasa de la distribución exponencial, que representa la tasa instantánea de adopción en cualquier momento.
+
+Nota: Este modelo generativo simplificado no considera las variables no observadas o no tomadas en cuenta, como el sexo, el temperamento o la edad del gato, que podrían influir en los tiempos de adopción. Además, al excluir los datos censurados, estamos limitando nuestro análisis únicamente a los gatos que fueron adoptados durante el período de observación.
+
+
+```{r}
+data(AustinCats)
+AustinCats <- AustinCats %>%
+  select(color, date_in, date_out, out_event, days_to_event) %>%
+  mutate(
+    pelaje = ifelse(color == "Black", "negro", "otro"),
+    id_pelaje = ifelse(color == "Black", 1, 2),
+    adoptado = ifelse(out_event == "Adoption", 1, 0),
+    censurado = ifelse(out_event != "Adoption", 1, 0)
+  )
+```
+
+```{r}
+print(AustinCats)
+```
+
+```{r}
+model_string <- "
+data {
+  int<lower=0> N;  // Número total de observaciones
+  int<lower=0> J;  // Número de categorías de color de pelaje
+  int<lower=1,upper=J> color_id[N];  // Índice de color de pelaje para cada observación
+  int<lower=0,upper=1> adopted[N];  // Indicador de adopción para cada observación
+  vector<lower=0>[N] days_to_event;  // Días hasta el evento (adopción o censura) para cada observación
+}
+
+parameters {
+  vector[J] alpha;  // Intercepto para cada categoría de color de pelaje
+}
+
+model {
+  vector[N] lambda;  // Tasa de adopción para cada observación
+  
+  alpha ~ normal(0, 1);  // Prior para los interceptos: distribución normal con media 0 y desviación estándar 1
+  
+  for (i in 1:N) {
+    lambda[i] = exp(-alpha[color_id[i]]);  // Tasa de adopción para cada observación, basada en el intercepto correspondiente al color de pelaje
+  }
+  
+  days_to_event ~ exponential(lambda);  // Distribución exponencial para los días hasta el evento, con tasa lambda
+}
+"
+```
+
+```{r}
+stan_model <- stan_model(model_code = model_string, model_name = "modelo_gatos")
+```
+
+
+```{r}
+data_list = list(
+  N = nrow(AustinCats),
+  J = length(unique(AustinCats$id_pelaje)),
+  color_id = AustinCats$id_pelaje,
+  adopted = AustinCats$adoptado,
+  days_to_event = AustinCats$days_to_event
+)
+```
+
+
+```{r}
+stan_fit <- sampling(stan_model, data = data_list, chains = 3, iter = 2000, warmup = 1000, thin = 2, control = list(adapt_delta = 0.95))
+```
+
+
+```{r}
+print(stan_fit)
+```
+```{r}
+alpha_samples <- extract(stan_fit, pars = "alpha")$alpha
+```
+
+```{r}
+traceplot(stan_fit, pars = "alpha")
+```
+
+
+Inferencia
+A partir de la distribución a posteriori de alpha, calculamos intervalos de credibilidad para evaluar la plausibilidad de los valores de los interceptos para cada categoría de color de pelaje, dada la evidencia de los datos. Los intervalos de credibilidad para cada elemento de alpha nos permitirán determinar si existe evidencia estadísticamente significativa de que el color del pelaje influye en el tiempo de adopción. Si los intervalos de credibilidad para las diferentes categorías de color no se superponen significativamente, esto sugeriría que hay una diferencia en los tiempos de adopción entre los gatos de diferentes colores.
+
+```{r}
+library(posterior)
+
+library(ggplot2)
+
+alpha_df <- as.data.frame(alpha_samples)
+colnames(alpha_df) <- paste0("alpha[", 1:ncol(alpha_df), "]")
+
+alpha_long <- tidyr::gather(alpha_df, key = "parameter", value = "value")
+
+ggplot(alpha_long, aes(x = value, fill = parameter)) +
+  geom_density(alpha = 0.6) +
+  xlab("Alpha") +
+  ylab("Density") +
+  ggtitle("Posterior Distributions of Alpha")
+```
+Intervalos de credibilidad:
+
+
+El intervalo de credibilidad del 95% para alpha[1] (gatos negros) es [3.30, 3.37].
+El intervalo de credibilidad del 95% para alpha[2] (otros colores) es [3.20, 3.22].
+
+Estos intervalos no se superponen, lo que sugiere que hay una diferencia significativa en los tiempos de adopción entre los gatos negros y los gatos de otros colores.
+
+Medias posteriores:
+
+
+La media posterior de alpha[1] (gatos negros) es 3.33.
+La media posterior de alpha[2] (otros colores) es 3.21.
+
+Observaciones
+
+Es crucial reconocer que este modelo ignora los datos censurados (gatos no adoptados), lo que podría introducir sesgo en las estimaciones. Los gatos no adoptados podrían tener características distintas a los adoptados.
+
+Por lo tanto, aunque el Modelo 2 ofrece información valiosa, sus resultados deben interpretarse con precaución y complementarse con los del Modelo 1, que incorpora los datos censurados para un análisis más completo.
+
+```{r}
+lambda_black <- exp(-3.33)  # Tasa de adopción para gatos negros
+lambda_other <- exp(-3.21)  # Tasa de adopción para gatos de otros colores
+
+calc_cdf_ccdf <- function(lambda, t) {
+  cdf <- 1 - exp(-lambda * t)
+  ccdf <- exp(-lambda * t)
+  return(data.frame(t = t, cdf = cdf, ccdf = ccdf))
+}
+
+t <- seq(0, 100, length.out = 1000)  # Rango de tiempo (0 a 100 días)
+cdf_ccdf_black <- calc_cdf_ccdf(lambda_black, t)
+cdf_ccdf_other <- calc_cdf_ccdf(lambda_other, t)
+
+
+library(ggplot2)
+
+# Gráfico CDF
+cdf_plot <- ggplot() +
+  geom_line(data = cdf_ccdf_black, aes(x = t, y = cdf, color = "Black"), size = 1) +
+  geom_line(data = cdf_ccdf_other, aes(x = t, y = cdf, color = "Other"), size = 1) +
+  labs(x = "Time (days)", y = "Cumulative Probability", title = "CDF of Adoption Time") +
+  scale_color_manual(name = "Coat Color", values = c("Black" = "black", "Other" = "blue"))
+
+# Gráfico CCDF
+ccdf_plot <- ggplot() +
+  geom_line(data = cdf_ccdf_black, aes(x = t, y = ccdf, color = "Black"), size = 1) +
+  geom_line(data = cdf_ccdf_other, aes(x = t, y = ccdf, color = "Other"), size = 1) +
+  labs(x = "Time (days)", y = "Complementary Cumulative Probability", title = "CCDF of Adoption Time") +
+  scale_color_manual(name = "Coat Color", values = c("Black" = "black", "Other" = "blue"))
+
+# Mostrar los gráficos
+print(cdf_plot)
+print(ccdf_plot)
+```
+La curva CDF muestra la probabilidad acumulada de que un gato sea adoptado antes o en un tiempo determinado.
+La curva CCDF muestra la probabilidad acumulada complementaria, es decir, la probabilidad de que un gato no sea adoptado antes o en un tiempo determinado
