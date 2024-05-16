@@ -617,3 +617,365 @@ print(ccdf_plot)
 ```
 La curva CDF muestra la probabilidad acumulada de que un gato sea adoptado antes o en un tiempo determinado.
 La curva CCDF muestra la probabilidad acumulada complementaria, es decir, la probabilidad de que un gato no sea adoptado antes o en un tiempo determinado
+
+
+##Propuesta de mas variables en el modelo . Modelo 3
+
+El dataset contiene las siguientes variables:
+- `id`: Identificador único para cada gato (no se usa en el análisis estadístico).
+- `days_to_event`: Tiempo hasta el evento de adopción o salida del refugio (variable dependiente).
+- `date_out`: Fecha de salida del refugio.
+- `out_event`: Tipo de evento de salida (por ejemplo, adopción, transferencia).
+- `date_in`: Fecha de entrada al refugio.
+- `in_event`: Tipo de evento de entrada (por ejemplo, abandonado, entregado por el dueño).
+- `breed`: Raza del gato.
+- `color`: Color del pelaje del gato.
+- `intake_age`: Edad del gato al momento de ingresar al refugio.
+
+### Variables Utilizadas en el Modelo
+
+- \( T_i \) - Tiempo hasta la adopción para el i-ésimo gato (variable objetivo).
+- \( C_i \) - Color del pelaje, codificado como variable categórica.
+- \( B_i \) - Raza, codificada como variable categórica.
+- \( E_i \) - Evento de entrada, codificado como variable categórica.
+- \( A_i \) - Edad al ingresar, variable continua.
+- \( M_i \) - Mes de entrada, extraído de `date_in` y tratado como categórico.
+- \( Y_i \) - Año de entrada, extraído de `date_in` y tratado como categórico.
+
+
+Modelo
+Usamos una distribución exponencial para modelar los tiempos hasta la adopción, donde el logaritmo de la tasa de adopción depende linealmente de las covariables:
+$$ t_i \sim \text{Exponential}(\lambda_i) $$
+$$ \log(\lambda_i) = \alpha_{c[i]} + \beta_{\text{in},e[i]} + \beta_{\text{month},m[i]} + \beta_{\text{year},y[i]} $$
+Donde:
+
+$t_i$ es el tiempo hasta la adopción para el i-ésimo gato
+$\lambda_i$ es la tasa de adopción para el i-ésimo gato
+$\alpha_{c[i]}$ es el intercepto para el color de pelaje $c[i]$ del i-ésimo gato
+$\beta_{\text{in},e[i]}$ es el coeficiente para el tipo de evento de entrada $e[i]$ del i-ésimo gato
+$\beta_{\text{month},m[i]}$ es el coeficiente para el mes de entrada $m[i]$ del i-ésimo gato
+$\beta_{\text{year},y[i]}$ es el coeficiente para el año de entrada $y[i]$ del i-ésimo gato
+
+Usamos priors normales para los parámetros $\alpha$, $\beta_\text{in}$, $\beta_\text{month}$ y $\beta_\text{year}$, y un prior exponencial para el parámetro de desviación estándar $\sigma$.
+
+
+### Especificaciones del Modelo
+
+El modelo que se implementará en Stan utilizará una distribución exponencial para modelar los tiempos de adopción, asumiendo que el logaritmo del parámetro de tasa de adopción depende linealmente de las covariables incluidas:
+
+
+
+Conversión de Fechas: Las columnas date_in y date_out se convierten de factores a objetos de fecha y hora usando lubridate::mdy_hms, que maneja correctamente formatos de fecha en el estilo mes/día/año hora:minutos:segundos AM/PM.
+
+Extracción de Mes y Año: Se extraen el mes y el año de la fecha de entrada para usarlos como covariables categóricas en el modelo.
+
+Codificación del Color del Pelaje y Evento de Salida: Se crea una variable binaria id_pelaje para el color del pelaje y se codifican las variables adoptado y censurado basadas en el evento de salida.
+
+Codificación de Evento de Entrada: in_event se convierte a un código numérico para incluirlo en el modelo estadístico como una variable categórica.
+
+
+Análisis Posterior
+Después de ajustar el modelo, analizamos las distribuciones posteriores de los parámetros para inferir cómo las diferentes covariables afectan las tasas de adopción. También comparamos las tasas de adopción esperadas para diferentes perfiles de gatos para entender mejor estos efectos.
+
+```{r}
+library(dplyr)
+library(lubridate)  # Para manejar fechas
+
+# Cargando los datos
+data(AustinCats)
+
+# Preparando los datos
+AustinCats_prepared <- AustinCats %>%
+  mutate(
+    # Convertir fechas de factor a fecha
+    date_in = mdy_hms(as.character(date_in)),
+    date_out = mdy_hms(as.character(date_out)),
+    
+    # Extraer mes y año de la fecha de entrada
+    month_in = month(date_in, label = TRUE),
+    year_in = year(date_in),
+    
+    # Codificar color del pelaje
+    pelaje = ifelse(color == "Black", "negro", "otro"),
+    id_pelaje = as.integer(color == "Black"),  # 1 para negro, 0 para otros
+    
+    # Codificar si el gato fue adoptado
+    adoptado = as.integer(out_event == "Adoption"),
+    
+    # Codificar si el dato está censurado
+    censurado = as.integer(out_event != "Adoption"),
+    
+    # Codificar el evento de entrada
+    in_event_code = as.numeric(as.factor(in_event))  # Convertir evento de entrada a código numérico
+    
+  ) %>%
+  select(id_pelaje, days_to_event, month_in, year_in, adoptado, censurado, in_event_code)  
+
+# Mostrar las primeras filas del dataframe preparado
+head(AustinCats_prepared)
+
+```
+
+```{r}
+model_string <- "
+data {
+  int<lower=0> N;  // Número total de observaciones
+  int<lower=0> J;  // Número de categorías de color de pelaje
+  int<lower=0> K;  // Número de categorías del evento de entrada
+  int<lower=0> M;  // Número de categorías de meses
+  int<lower=0> L;  // Número de categorías de años
+  
+  int<lower=1, upper=J> color_id[N];  // Índice de color de pelaje para cada observación
+  int<lower=0, upper=1> adopted[N];  // Indicador de adopción para cada observación
+  vector<lower=0>[N] days_to_event;  // Días hasta el evento (adopción o censura) para cada observación
+  int<lower=1, upper=K> in_event_id[N];  // Índice del evento de entrada
+  int<lower=1, upper=M> month_id[N];  // Índice del mes de entrada
+  int<lower=1, upper=L> year_id[N];  // Índice del año de entrada
+}
+
+parameters {
+  vector[J] alpha;  // Intercepto para cada categoría de color de pelaje
+  vector[K] beta_in;  // Coeficientes para cada categoría del evento de entrada
+  vector[M] beta_month;  // Coeficientes para cada categoría de mes
+  vector[L] beta_year;  // Coeficientes para cada categoría de año
+  real<lower=0> sigma;  // Desviación estándar para el modelo
+}
+
+model {
+  vector[N] lambda;  // Tasa de adopción para cada observación
+  
+  alpha ~ normal(0, 1);
+  beta_in ~ normal(0, 1);
+  beta_month ~ normal(0, 1);
+  beta_year ~ normal(0, 1);
+  sigma ~ exponential(0.01);
+  
+  for (i in 1:N) {
+    lambda[i] = exp(alpha[color_id[i]] + beta_in[in_event_id[i]] + beta_month[month_id[i]] + beta_year[year_id[i]]);
+  }
+  
+  days_to_event ~ exponential(lambda);
+}
+"
+
+# Crear el modelo Stan, nombrándolo como modelo_gatos_3
+stan_model <- rstan::stan_model(model_code = model_string, model_name = "modelo_gatos_3")
+
+# Ajustar el modelo
+stan_fit <- rstan::sampling(stan_model, data = data_list, chains = 3, iter = 2000, warmup = 1000, thin = 2, control = list(adapt_delta = 0.95))
+
+# Imprimir resultados
+print(stan_fit)
+
+```
+
+
+```{r}
+# Asegúrate de que las columnas relevantes no contienen NA y revisa sus valores únicos
+summary(AustinCats$in_event_id)
+summary(AustinCats$month_id)
+summary(AustinCats$year_id)
+
+# Si alguna de estas columnas contiene NA, necesitas limpiar los datos o ajustar los NA antes de calcular K, M, L
+AustinCats$in_event_id <- na.omit(AustinCats$in_event_id)
+AustinCats$month_id <- na.omit(AustinCats$month_id)
+AustinCats$year_id <- na.omit(AustinCats$year_id)
+
+# Ahora, recalcula K, M, L
+K <- max(AustinCats$in_event_id, na.rm = TRUE)
+M <- max(AustinCats$month_id, na.rm = TRUE)
+L <- max(AustinCats$year_id, na.rm = TRUE)
+
+# Asegúrate de que K, M, y L no son -Inf
+print(K)
+print(M)
+print(L)
+
+
+```
+
+
+Datos: Se incluyen varias variables categóricas que tienen índices para sus categorías (como color_id, in_event_id, month_id, year_id). También se debe especificar el número de categorías para cada una de estas variables (J, K, M, L).
+Parámetros: Se definen vectores de coeficientes para cada predictor categórico. Además, se incluye un término sigma para manejar la variabilidad en el modelo.
+Modelo: Para cada observación, se calcula un valor de lambda basado en la suma de los efectos de los predictores, usando la función exponencial para asegurar que lambda sea siempre positivo. La distribución de los tiempos hasta el evento se modela como exponencial con estos valores de lambda.
+
+
+```{r}
+stan_model <- stan_model(model_code = model_string, model_name = "modelo_gatos")
+
+```
+
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(rstan)
+
+data(AustinCats)
+
+AustinCats_prepared <- AustinCats %>%
+  mutate(
+    date_in = mdy_hms(as.character(date_in)),
+    date_out = mdy_hms(as.character(date_out)),
+    month_in = month(date_in, label = TRUE),
+    year_in = year(date_in),
+    pelaje = ifelse(color == "Black", "negro", "otro"),
+    id_pelaje = as.integer(color == "Black"),
+    adoptado = as.integer(out_event == "Adoption"),
+    censurado = as.integer(out_event != "Adoption"),
+    in_event_code = as.integer(as.factor(in_event)),
+    color_id = as.integer(as.factor(id_pelaje)),
+    in_event_id = as.integer(as.factor(in_event_code)),
+    month_id = as.integer(month_in),
+    year_id = as.integer(as.factor(year_in))
+  ) %>%
+  select(color_id, days_to_event, month_id, year_id, adoptado, censurado, in_event_id)
+
+model_string <- "
+data {
+  int<lower=0> N;
+  int<lower=1> J; 
+  int<lower=1> K;
+  int<lower=1> M;
+  int<lower=1> L;
+  int<lower=1, upper=J> color_id[N];
+  int<lower=0, upper=1> adopted[N];
+  vector<lower=0>[N] days_to_event;
+  int<lower=1, upper=K> in_event_id[N];
+  int<lower=1, upper=M> month_id[N];
+  int<lower=1, upper=L> year_id[N];
+}
+
+parameters {
+  vector[J] alpha;
+  vector[K] beta_in;
+  vector[M] beta_month;
+  vector[L] beta_year;
+  real<lower=0> sigma;
+}
+
+model {
+  vector[N] inv_lambda;
+  
+  alpha ~ normal(0, 1);
+  beta_in ~ normal(0, 1);
+  beta_month ~ normal(0, 1);
+  beta_year ~ normal(0, 1);
+  sigma ~ exponential(0.01);
+  
+  for (i in 1:N) {
+    inv_lambda[i] = exp(-(alpha[color_id[i]] + beta_in[in_event_id[i]] + 
+                          beta_month[month_id[i]] + beta_year[year_id[i]]));
+  }
+  
+  days_to_event ~ exponential(inv_lambda);
+}
+"
+
+stan_model <- stan_model(model_code = model_string, model_name = "modelo_gatos_3")
+
+stan_fit <- sampling(stan_model, data = data_list, chains = 3, iter = 2000, warmup = 1000, thin = 2, 
+                     control = list(adapt_delta = 0.95))
+
+print(stan_fit)
+```
+```{r}
+# Verificar la convergencia
+print(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"))
+
+# Visualizar las distribuciones posteriores
+plot(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"))
+
+# Obtener intervalos de credibilidad del 95% para los parámetros
+posterior_interval(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"), prob = 0.95)
+
+# Extraer muestras posteriores
+posterior_samples <- posterior_samples(stan_fit)
+
+# Calcular la tasa de adopción esperada para gatos negros que ingresan en enero de 2015
+negro_ene_2015 <- exp(-(posterior_samples$alpha[,1] + 
+                         posterior_samples$beta_in[,1] + 
+                         posterior_samples$beta_month[,1] + 
+                         posterior_samples$beta_year[,6]))
+                         
+# Resumen de la distribución posterior de la tasa de adopción para este perfil
+summary(negro_ene_2015)
+```
+```{r}
+# Verificar la convergencia
+print(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"))
+
+# Visualizar las distribuciones posteriores
+plot(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"))
+
+# Extraer muestras posteriores
+posterior_samples <- rstan::extract(stan_fit)
+
+# Obtener intervalos de credibilidad del 95% para los parámetros
+credible_intervals <- lapply(posterior_samples, function(x) {
+  if (is.matrix(x)) {
+    apply(x, 2, function(y) quantile(y, probs = c(0.025, 0.975)))
+  } else {
+    quantile(x, probs = c(0.025, 0.975))
+  }
+})
+
+print(credible_intervals)
+
+# Calcular la tasa de adopción esperada para gatos negros que ingresan en enero de 2015
+negro_ene_2015 <- exp(-(posterior_samples$alpha[,1] + 
+                         posterior_samples$beta_in[,1] + 
+                         posterior_samples$beta_month[,1] + 
+                         posterior_samples$beta_year[,6]))
+                         
+# Resumen de la distribución posterior de la tasa de adopción para este perfil
+summary(negro_ene_2015)
+```
+Comentarios:
+
+interpretar los resultados:
+
+Los intervalos de credibilidad del 95% para cada parámetro nos dan un rango en el que esperamos que se encuentre el verdadero valor del parámetro con una probabilidad del 95%, dados los datos observados. Por ejemplo, para alpha[1] (el intercepto para la primera categoría de color de pelaje), el intervalo de credibilidad del 95% es [0.70, 2.62], lo que sugiere que la tasa de adopción base para esta categoría de color es probable que se encuentre en este rango.
+
+Los valores de beta_in, beta_month y beta_year nos indican cómo cada categoría de estas variables afecta la tasa de adopción en comparación con una categoría de referencia. Valores positivos indican un aumento en la tasa de adopción, mientras que valores negativos indican una disminución. Por ejemplo, beta_month[4] tiene un intervalo de credibilidad del 95% de [0.18, 1.14], lo que sugiere que la tasa de adopción es probable que sea mayor en el cuarto mes en comparación con el mes de referencia.
+
+La distribución posterior de la tasa de adopción para gatos negros que ingresan en enero de 2015 (negro_ene_2015) nos da una idea de la tasa de adopción esperada para este perfil específico de gatos. La media de 0.0857 sugiere que, en promedio, alrededor del 8.57% de estos gatos serían adoptados por unidad de tiempo (dependiendo de la escala de tiempo que hayas usado en tus datos).
+
+#seleccion de algunos perfiles de gatos para probar el modelo
+```{r}
+# Calcular la tasa de adopción esperada para gatos no negros que ingresan en julio de 2013
+otro_jul_2013 <- exp(-(posterior_samples$alpha[,2] + 
+                         posterior_samples$beta_in[,1] + 
+                         posterior_samples$beta_month[,7] + 
+                         posterior_samples$beta_year[,3]))
+
+# Calcular la tasa de adopción esperada para gatos negros que ingresan en diciembre de 2017
+negro_dic_2017 <- exp(-(posterior_samples$alpha[,1] + 
+                         posterior_samples$beta_in[,1] + 
+                         posterior_samples$beta_month[,12] + 
+                         posterior_samples$beta_year[,6]))
+
+# Comparar las distribuciones posteriores
+boxplot(negro_ene_2015, otro_jul_2013, negro_dic_2017, 
+        names = c("Negro Ene 2015", "Otro Jul 2013", "Negro Dic 2017"),
+        main = "Comparación de Tasas de Adopción Esperadas",
+        ylab = "Tasa de Adopción Esperada")
+```
+
+```{r}
+# Gráficos de autocorrelación
+rstan::traceplot(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"),
+                 inc_warmup = FALSE, nrow = 5)
+
+# Resumen de n_eff y Rhat para todos los parámetros
+rstan::summary(stan_fit, pars = c("alpha", "beta_in", "beta_month", "beta_year", "sigma"))$summary[, c("n_eff", "Rhat")]
+```
+
+
+El diagrama de caja compara las tasas de adopción esperadas para tres perfiles específicos de gatos: gatos negros que ingresan en enero de 2015, gatos no negros que ingresan en julio de 2013 y gatos negros que ingresan en diciembre de 2017. La mediana de la tasa de adopción esperada parece ser más alta para los gatos no negros que ingresan en julio de 2013, seguida por los gatos negros que ingresan en enero de 2015, y los gatos negros que ingresan en diciembre de 2017 tienen la mediana más baja.
+
+Los gráficos de trazas muestran las muestras de parámetros de las cadenas MCMC para todos los parámetros del modelo. Para la mayoría de los parámetros, las cadenas parecen mezclarse bien y converger a distribuciones similares, lo cual es una buena señal para la convergencia del modelo. Sin embargo, el gráfico de trazas para el parámetro sigma muestra mucha más variabilidad y una mezcla más lenta, lo que podría indicar algunos problemas con la estimación de ese parámetro.
+
+Los valores de n_eff (tamaño efectivo de la muestra) son bastante bajos para muchos parámetros, especialmente los parámetros beta_month. Esto sugiere que todavía hay bastante autocorrelación en las cadenas, y que pueden ser necesarias más iteraciones para obtener estimaciones posteriores confiables. Como regla general, se recomienda un n_eff de al menos 400 para cada parámetro.
+
+Los valores de Rhat están todos muy cerca de 1, lo cual es una buena señal de que las cadenas han convergido. Un Rhat significativamente por encima de 1 indicaría falta de convergencia.
