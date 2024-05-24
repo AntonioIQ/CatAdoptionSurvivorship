@@ -1,6 +1,6 @@
 data{
 int N;
-array[N] int adopted;
+// array[N] int adopted;
 vector[N] days_to_event;
 array[N] int color_id;
 }
@@ -23,17 +23,15 @@ vector[N] mu;
 
 model{
 alpha ~ normal(0, 1);
+  // for (i in 1:N)
+  //   if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]);
   for (i in 1:N)
-    if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]);
-  for (i in 1:N)
-    if (adopted[i] == 1) days_to_event[i] ~ exponential(lambda[i]);
+    days_to_event[i] ~ exponential(lambda[i]);
 }
 
 generated quantities{
 vector[N] pred;
-  for (i in 1:N) 
-    if (adopted[i] == 1) pred[i] = exponential_rng(lambda[i]);
-  for (i in 1:N) 
-    if (adopted[i] == 0) pred[i] = exponential_lccdf(days_to_event[i] | lambda[i]);
+  for (i in 1:N)
+    pred[i] = exponential_rng(lambda[i]);
 }
 
