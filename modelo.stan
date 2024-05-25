@@ -13,16 +13,13 @@ transformed parameters{
 vector<lower=0>[N] lambda;
 vector[N] mu;
   for ( i in 1:N ) {
-    mu[i] = alpha[color_id[i]];
-    mu[i] = exp(mu[i]);
-  }
-  for ( i in 1:N ) {
+    mu[i] = exp(alpha[color_id[i]]);
     lambda[i] = 1/mu[i];
   }
 }
 
 model{
-alpha ~ normal(0, 1);
+alpha ~ normal(3, 1);
   // for (i in 1:N)
   //   if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]);
   for (i in 1:N)

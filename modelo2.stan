@@ -20,7 +20,7 @@ vector<lower=0>[N] mu;
 
 model{
   
-  alpha ~ normal(0, 3);
+  alpha ~ normal(3, 1);
   
   for (i in 1:N)
     if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]); 

@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2024-05-29">
+
+<title>Análisis de Supervivencia con adopciones de gatos</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="Proyecto_Final_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Proyecto_Final_files/libs/quarto-html/quarto.js"></script>
+<script src="Proyecto_Final_files/libs/quarto-html/popper.min.js"></script>
+<script src="Proyecto_Final_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Proyecto_Final_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Proyecto_Final_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Proyecto_Final_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Proyecto_Final_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Proyecto_Final_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Proyecto_Final_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script src="Proyecto_Final_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<script src="Proyecto_Final_files/libs/viz-1.8.2/viz.js"></script>
+<link href="Proyecto_Final_files/libs/DiagrammeR-styles-0.2/styles.css" rel="stylesheet">
+<script src="Proyecto_Final_files/libs/grViz-binding-1.0.11/grViz.js"></script>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Análisis de Supervivencia con adopciones de gatos</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Authors</div>
+    <div class="quarto-title-meta-contents">
+             <p>Sara Luz valenzuela Camacho </p>
+             <p>Gabriela Patricia Venegas Sánchez </p>
+             <p>José Antonio Tapia Godínez </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">May 29, 2024</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="proyecto-final" class="level1">
+<h1>Proyecto Final</h1>
+<section id="planteamiento" class="level2">
+<h2 class="anchored" data-anchor-id="planteamiento">Planteamiento</h2>
+<p>En el presente trabajo analizamos un problema tomado de las notas del curso de Statistical Rethinking del 2019 de McElreath. El objetivo es determinar si a los gatos de color negro les toma más tiempo ser adoptados. Trabajeremos con la base de datos <code>AustinCats</code> de la librería de <code>rethinking</code>.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-1_4e426fa509d0beb62f41c4a85cfc484a">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(rethinking)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DiagrammeR)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(broom)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(distributional)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dagitty)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggdist)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(cmdstanr)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(rstan)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(AustinCats)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">glimpse</span>(AustinCats)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Rows: 22,356
+Columns: 9
+$ id            &lt;fct&gt; A730601, A679549, A683656, A709749, A733551, A756485, A7…
+$ days_to_event &lt;int&gt; 1, 25, 4, 41, 9, 4, 4, 5, 24, 2, 34, 27, 3, 151, 106, 4,…
+$ date_out      &lt;fct&gt; 07/08/2016 09:00:00 AM, 06/16/2014 01:54:00 PM, 07/17/20…
+$ out_event     &lt;fct&gt; Transfer, Transfer, Adoption, Transfer, Transfer, Adopti…
+$ date_in       &lt;fct&gt; 07/07/2016 12:11:00 PM, 05/22/2014 03:43:00 PM, 07/13/20…
+$ in_event      &lt;fct&gt; Stray, Stray, Stray, Stray, Stray, Stray, Stray, Owner S…
+$ breed         &lt;fct&gt; Domestic Shorthair Mix, Domestic Shorthair Mix, Snowshoe…
+$ color         &lt;fct&gt; Blue Tabby, Black/White, Lynx Point, Calico, Brown Tabby…
+$ intake_age    &lt;int&gt; 7, 1, 2, 12, 1, 1, 2, 24, 1, 3, 4, 12, 1, 7, 0, 12, 1, 1…</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># AustinCats %&gt;% head(5)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Las variables que nos interesan son color(<code>color</code>), raza(<code>breed</code>), edad a la que entró (<code>intake_age</code>) motivo de la salida(<code>out_event</code>) y días para el evento de salida (<code>days_to_event</code>).</p>
+<p>Para el color dado que hay 204 tipos en la base, los clasificaremos solo en “negro” y “otro”:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-2_03952a4e1be8478c8dfba2035f0adf05">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>AustinCats <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pelaje =</span> <span class="fu">ifelse</span>(color <span class="sc">==</span> <span class="st">"Black"</span>, <span class="st">"negro"</span>, <span class="st">"otro"</span>),</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">id_pelaje  =</span> <span class="fu">ifelse</span>(color <span class="sc">==</span> <span class="st">"negro"</span>, <span class="dv">1</span>, <span class="dv">2</span>)) </span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>color_gatos <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(pelaje) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">porcentaje =</span> <span class="fu">round</span>(<span class="dv">100</span><span class="sc">*</span>n<span class="sc">/</span><span class="fu">sum</span>(n)))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>color_gatos <span class="sc">%&gt;%</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">y =</span> pelaje)) <span class="sc">+</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> porcentaje, <span class="at">fill =</span> pelaje)) <span class="sc">+</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">x =</span> porcentaje, <span class="at">label =</span> <span class="fu">paste0</span>(porcentaje, <span class="st">"%"</span>)), </span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>            <span class="at">position =</span> <span class="fu">position_stack</span>(<span class="at">vjust =</span> <span class="fl">0.5</span>), </span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">color =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"negro"</span> <span class="ot">=</span> <span class="st">"black"</span>, <span class="st">"otro"</span> <span class="ot">=</span> <span class="st">"brown"</span>)) <span class="sc">+</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">guides</span>(<span class="at">fill =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Porcentaje"</span>, <span class="at">y =</span> <span class="st">"Pelaje"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: The `&lt;scale&gt;` argument of `guides()` cannot be `FALSE`. Use "none" instead as
+of ggplot2 3.3.4.</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-2-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>De igual forma para raza los clasificaremos en “doméstico” si son de la raza <code>Domestic Shorthair Mix</code>, y ‘otro’ para las demás razas:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-3_d62ce4b58d03a607cd5c7eeedf17a94d">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>AustinCats <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">raza =</span> <span class="fu">ifelse</span>(breed <span class="sc">==</span> <span class="st">"Domestic Shorthair Mix"</span>, <span class="st">"domestico"</span>, <span class="st">"otro"</span>),</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">id_pelaje  =</span> <span class="fu">ifelse</span>(raza <span class="sc">==</span> <span class="st">"domestico"</span>, <span class="dv">1</span>, <span class="dv">2</span>)) </span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>raza_gatos <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(raza) <span class="sc">%&gt;%</span> </span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">porcentaje =</span> <span class="fu">round</span>(<span class="dv">100</span><span class="sc">*</span>n<span class="sc">/</span><span class="fu">sum</span>(n)))</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>raza_gatos <span class="sc">%&gt;%</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">y =</span> raza)) <span class="sc">+</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> porcentaje, <span class="at">fill =</span> raza)) <span class="sc">+</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">x =</span> porcentaje, <span class="at">label =</span> <span class="fu">paste0</span>(porcentaje, <span class="st">"%"</span>)), </span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>            <span class="at">position =</span> <span class="fu">position_stack</span>(<span class="at">vjust =</span> <span class="fl">0.5</span>), </span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>            <span class="at">color =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"domestico"</span> <span class="ot">=</span> <span class="st">"cyan"</span>, <span class="st">"otro"</span> <span class="ot">=</span> <span class="st">"blue"</span>)) <span class="sc">+</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">guides</span>(<span class="at">fill =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Porcentaje"</span>, <span class="at">y =</span> <span class="st">"Raza"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>El evento de salida, se refiere a la razón por la que los gatos salieron del refugio, en este caso la gran mayoría es adoptado:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-4_1924fd2fd31289a7b82ee6f82a67ab69">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>AustinCats <span class="sc">%&gt;%</span> <span class="fu">count</span>(out_event)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>   out_event     n
+1   Adoption 11351
+2   Censored   549
+3       Died   369
+4   Disposal     9
+5 Euthanasia   636
+6    Missing    28
+7   Transfer  9414</code></pre>
+</div>
+</div>
+<p>Siguiento el tratamiento propuesto por McElreath, crearemos dos variables a partir de la variable de evento de salida: “adoptado”, que será binaria dependiendo de si fue adoptado o no, y la de “censurado”, igualmente binaria y opuesta a la de “adoptado”.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-5_c089e0554d6702f9b030f6a403f273ff">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>AustinCats <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">adoptado  =</span> <span class="fu">ifelse</span>(out_event <span class="sc">==</span> <span class="st">"Adoption"</span>, <span class="dv">1</span>, <span class="dv">0</span>),</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">censurado =</span> <span class="fu">ifelse</span>(out_event <span class="sc">!=</span> <span class="st">"Adoption"</span>, <span class="dv">1</span>, <span class="dv">0</span>))</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>gatos_adoptados <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">salida  =</span> <span class="fu">ifelse</span>(out_event <span class="sc">==</span> <span class="st">"Adoption"</span>, <span class="st">"adopción"</span>, <span class="st">"otro"</span>)) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(salida) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">porcentaje =</span> <span class="dv">100</span><span class="sc">*</span>n<span class="sc">/</span><span class="fu">sum</span>(n))</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>gatos_adoptados <span class="sc">%&gt;%</span> </span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">y =</span> salida)) <span class="sc">+</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> porcentaje, <span class="at">fill =</span> <span class="fu">factor</span>(salida))) <span class="sc">+</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"adopción"</span> <span class="ot">=</span> <span class="st">"green"</span>, <span class="st">"otro"</span> <span class="ot">=</span> <span class="st">"red"</span>)) <span class="sc">+</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">guides</span>(<span class="at">fill =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Tenemos datos censurados únicamente por la derecha. No hay censurados por la izquierda ya que todos los gatos cuentan con una fecha de entrada al refugio. Los censurados por las derecha son aquellos que por alguno u otra razón salieron del refugio sin ser adoptados, o que siguen en el refugio esperando ser adoptados.</p>
+</section>
+<section id="modelo-sin-datos-censurados" class="level2">
+<h2 class="anchored" data-anchor-id="modelo-sin-datos-censurados">Modelo sin datos censurados</h2>
+<p>No podemos ignorar los datos censurados, ya que lo que queremos modelar es el tiempo de espera antes de que un evento ocurra (muerte, adopción, etc.), y si quitamos estos datos tendríamos un error de sesgo. Como se ve en la siguiente gráfica.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-6_40398b86ca1b6e27ff6062b31d9cd07a">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>AustinCats <span class="sc">%&gt;%</span> </span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">censurado =</span> <span class="fu">factor</span>(censurado)) <span class="sc">%&gt;%</span> </span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(days_to_event <span class="sc">&lt;</span> <span class="dv">200</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> days_to_event, <span class="at">y =</span> censurado)) <span class="sc">+</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># let's just mark off the 50% intervals</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_halfeye</span>(<span class="at">.width =</span> .<span class="dv">5</span>, <span class="at">fill=</span><span class="st">"red"</span>, <span class="at">height =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(<span class="cn">NULL</span>, <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"censurado == 0"</span>, <span class="st">"censurado == 1"</span>)) <span class="sc">+</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_cartesian</span>(<span class="at">ylim =</span> <span class="fu">c</span>(<span class="fl">1.5</span>, <span class="fl">5.1</span>)) <span class="sc">+</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">axis.ticks.y =</span> <span class="fu">element_blank</span>())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Sin embargo, como ejemplo académico haremos un primer modelo sin datos censurados.</p>
+<section id="modelo-generativo" class="level3">
+<h3 class="anchored" data-anchor-id="modelo-generativo">Modelo generativo</h3>
+<p>Sea <span class="math inline">\(C\)</span> el color del pelaje del gato (1 si es negro y 2 en cualquier otro caso), <span class="math inline">\(U\)</span> las variables no observadas o no tomadas en cuenta para el modelo (si el gato llegó enfermo, sexo, temperamento, etc.), <span class="math inline">\(A\)</span> es 1 si el gato fue adoptado y 0 en cualquier otro caso, y <span class="math inline">\(D\)</span> los días que le toma a un gato ser adoptado o salir del refugio.</p>
+<p>Como para este primer modelo NO estamos tomando en cuenta los datos censurados, estamos controlando por <span class="math inline">\(A\)</span>, es decir sólo tomamos los datos de los gatos que son adoptados.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-7_0789470117d0ae453e421cdbac8c7e2f">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">grViz</span>(<span class="st">"</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="st">digraph {</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="st">  graph [ranksep = 0.2, rankdir = LR]</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="st">  node [shape=plaintext]</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="st">  U [shape=circle]</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="st">  C</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="st">  D</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="st">  A [fontcolor=red]</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="st">  edge [minlen = 3]</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="st">  U -&gt; A</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="st">  U -&gt; D</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="st">  C -&gt; D</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="st">  C -&gt; A</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="st">  A -&gt; D</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a><span class="st">"</span>, <span class="at">width =</span> <span class="dv">400</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div id="htmlwidget-7dcffd75f7cd1024815e" style="width:100%;height:780px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-7dcffd75f7cd1024815e">{"x":{"diagram":"\ndigraph {\n  graph [ranksep = 0.2, rankdir = LR]\n  node [shape=plaintext]\n  U [shape=circle]\n  C\n  D\n  A [fontcolor=red]\n  edge [minlen = 3]\n  U -> A\n  U -> D\n  C -> D\n  C -> A\n  A -> D\n}\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-8_c0c67f2333bec544bff4d659a309fb6a">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>g1 <span class="ot">&lt;-</span> <span class="fu">dagitty</span>( <span class="st">"dag {     U -&gt; A     C -&gt; A     A -&gt; D }"</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">impliedConditionalIndependencies</span>(g1, <span class="at">type =</span> <span class="st">"all.pairs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>C _||_ D | A
+C _||_ D | A, U
+C _||_ U
+D _||_ U | A
+D _||_ U | A, C</code></pre>
+</div>
+</div>
+<p>Es fácil observar que es una mala idea controlar por <span class="math inline">\(A\)</span>, que estamos bloqueando justo el efecto que queremos modelar que es si el color negro del gato afecta su tiempo para ser adoptado.</p>
+<p>Podemos modelar las adopciones sí observadas (no censuradas) como una probabilidad de que un evento ocurra, esto es:</p>
+<p><span class="math display">\[D_i\sim\exp(\lambda_i)\]</span> <span class="math display">\[p(D_i|\lambda_i)=\lambda_i\exp(-\lambda_iD_i)\]</span> La siguiente función simula una muestra de N gatos y regresa el tiempo para ser adoptados:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-9_e775c3658f56bba08b16bcb6aafacbaa">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>sim_gatos_1 <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">lambda_negro =</span> <span class="fl">0.02</span>, <span class="at">lambda_otro =</span> <span class="fl">0.04</span>, <span class="at">N =</span> <span class="dv">1000</span>, <span class="at">p=</span><span class="fl">0.15</span>) {</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  num_gatos_negros <span class="ot">&lt;-</span> <span class="fu">round</span>(N<span class="sc">*</span>p)</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  num_otros_gatos <span class="ot">&lt;-</span> N <span class="sc">-</span> num_gatos_negros</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  black_days <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_gatos_negros, lambda_negro))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  other_days <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_otros_gatos, lambda_otro))</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  censored <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">0</span>, N)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>( <span class="at">days_to_adoption =</span> <span class="fu">c</span>(black_days, other_days),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>          <span class="at">color_id=</span><span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">1</span>,num_gatos_negros),<span class="fu">rep</span>(<span class="dv">2</span>,num_otros_gatos)),</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>          censored</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Podemos hacer pruebas al modelo generativo en casos extremos:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-10_ca3eb5350940987e7708baadfab12b06">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1234)</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sim_gatos_1</span>(<span class="at">p=</span><span class="fl">1.0</span>, <span class="at">N=</span><span class="dv">10</span>) <span class="co"># puros gatos negros</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 10 × 3
+   days_to_adoption color_id censored
+              &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+ 1              220        1        0
+ 2               10        1        0
+ 3               40        1        0
+ 4               82        1        0
+ 5               34        1        0
+ 6              112        1        0
+ 7               46        1        0
+ 8               36        1        0
+ 9               15        1        0
+10               80        1        0</code></pre>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-11_5f44ee8fddb724fbdc42908536a9273c">
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sim_gatos_1</span>(<span class="at">p=</span><span class="fl">0.0</span>, <span class="at">N=</span><span class="dv">10</span>) <span class="co"># ningun gato negro</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 10 × 3
+   days_to_adoption color_id censored
+              &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+ 1               29        2        0
+ 2               33        2        0
+ 3               25        2        0
+ 4               23        2        0
+ 5               30        2        0
+ 6                5        2        0
+ 7               13        2        0
+ 8               14        2        0
+ 9                2        2        0
+10               71        2        0</code></pre>
+</div>
+</div>
+<p>Y también revisamos nuestro modelo generativo con el conocimiento de área, en este caso usamos la curva de supervivencia Kaplan-Meier:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-12_285ad22e443433f3b0750ed0711f2811">
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">sim_gatos_1</span>(<span class="at">N=</span><span class="dv">100</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure the data is sorted by days_to_adoption for each group</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(color_id, days_to_adoption)</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert color_id to a factor for better plotting</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>data<span class="sc">$</span>color_id <span class="ot">&lt;-</span> <span class="fu">as.factor</span>(data<span class="sc">$</span>color_id)</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>calculate_km <span class="ot">&lt;-</span> <span class="cf">function</span>(time, status) {</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>  n <span class="ot">&lt;-</span> <span class="fu">length</span>(time)</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>  survival <span class="ot">&lt;-</span> <span class="fu">cumprod</span>(<span class="dv">1</span> <span class="sc">-</span> status <span class="sc">/</span> (n<span class="sc">:</span><span class="dv">1</span>))</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">time =</span> time, <span class="at">survival =</span> survival)</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate KM estimates for each group</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>km_data <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(color_id) <span class="sc">%&gt;%</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(days_to_adoption) <span class="sc">%&gt;%</span></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">event =</span> <span class="dv">1</span> <span class="sc">-</span> censored) <span class="sc">%&gt;%</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">risk_set =</span> <span class="fu">rev</span>(<span class="fu">cumsum</span>(<span class="fu">rev</span>(event)))) <span class="sc">%&gt;%</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_modify</span>(<span class="sc">~</span> <span class="fu">calculate_km</span>(.x<span class="sc">$</span>days_to_adoption, .x<span class="sc">$</span>event)) <span class="sc">%&gt;%</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a><span class="co"># Restructure the data for plotting</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>km_plot_data <span class="ot">&lt;-</span> km_data <span class="sc">%&gt;%</span></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(time, survival, color_id) <span class="sc">%&gt;%</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>()</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the KM survival curve</span></span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(km_plot_data, <span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> survival, <span class="at">color =</span> color_id)) <span class="sc">+</span></span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_step</span>() <span class="sc">+</span></span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Kaplan-Meier Survival Curve"</span>, <span class="at">x =</span> <span class="st">"Time"</span>, <span class="at">y =</span> <span class="st">"Survival Probability"</span>) <span class="sc">+</span></span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Finalmente podemos simular de la a priori cuales son las posibilidades que estamos coniderando.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-13_bc2cc944ec7a754f32bc8fb596525088">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>sim_gatos_mod_1 <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">N =</span> <span class="dv">1000</span>, <span class="at">p=</span><span class="fl">0.15</span>) {</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  alpha <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(<span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">1</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># print(alpha)</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  lambda_negro <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">/</span><span class="fu">exp</span>(alpha[<span class="dv">1</span>])</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  lambda_otro <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">/</span><span class="fu">exp</span>(alpha[<span class="dv">2</span>])</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># print(lambda_negro)</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  num_gatos_negros <span class="ot">&lt;-</span> <span class="fu">round</span>(N<span class="sc">*</span>p)</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  num_otros_gatos <span class="ot">&lt;-</span> N <span class="sc">-</span> num_gatos_negros</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  negro_dias <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_gatos_negros, lambda_negro))</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>  otro_dias <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_otros_gatos, lambda_otro))</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>  censored <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="dv">0</span>, N)</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">days_to_adoption =</span> <span class="fu">c</span>(negro_dias, otro_dias),</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>          <span class="at">color_id=</span><span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">1</span>,num_gatos_negros),<span class="fu">rep</span>(<span class="dv">2</span>,num_otros_gatos)),</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>            censored</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Hacemos replicaciones:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-14_7f0d09a8f99e80b997757f1415191b98">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>sims_tbl <span class="ot">&lt;-</span> <span class="fu">map_df</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">20</span>, <span class="cf">function</span>(rep){</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sim_gatos_mod_1</span>(<span class="at">N=</span><span class="dv">100</span>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">rep =</span> rep)</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a> })</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Nuestros supuestos actuales se ven así</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-15_e111285456a993c35015a73d8963a59e">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>sims_tbl <span class="sc">%&gt;%</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(rep, color_id, days_to_adoption) <span class="sc">%&gt;%</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">color_id =</span> <span class="fu">as.factor</span>(color_id)) <span class="sc">%&gt;%</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(rep, color_id) <span class="sc">%&gt;%</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(days_to_adoption) <span class="sc">%&gt;%</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">event =</span> <span class="dv">1</span> <span class="sc">-</span> censored) <span class="sc">%&gt;%</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">risk_set =</span> <span class="fu">rev</span>(<span class="fu">cumsum</span>(<span class="fu">rev</span>(event)))) <span class="sc">%&gt;%</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_modify</span>(<span class="sc">~</span> <span class="fu">calculate_km</span>(.x<span class="sc">$</span>days_to_adoption, .x<span class="sc">$</span>event)) <span class="sc">%&gt;%</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(time, survival, color_id, rep) <span class="sc">%&gt;%</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> survival, <span class="at">color =</span> color_id)) <span class="sc">+</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_step</span>() <span class="sc">+</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Kaplan-Meier Survival Curve"</span>, <span class="at">x =</span> <span class="st">"Time"</span>, <span class="at">y =</span> <span class="st">"Survival Probability"</span>) <span class="sc">+</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">200</span>)) <span class="sc">+</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>rep)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Aunque hay algunas un poco extremas, la mayoría luce razonable.</p>
+</section>
+<section id="cantidad-a-estimar" class="level3">
+<h3 class="anchored" data-anchor-id="cantidad-a-estimar">Cantidad a estimar</h3>
+<p>Queremos estimar el numero de días <span class="math inline">\(D\)</span> que le toma a un gato esperar para ser adoptado, pero, como lo mencionamos arriba, tomaremos sólo los gatos que sí fueron adoptados en la ventana de tiempo, esto es,</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-16_c2b01fcfcc35c8ff0f105078afaf5c81">
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>AustinCats_model_1 <span class="ot">&lt;-</span> AustinCats <span class="sc">%&gt;%</span> <span class="fu">filter</span>(adoptado <span class="sc">==</span> <span class="dv">1</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(AustinCats_model_1)<span class="sc">/</span><span class="fu">nrow</span>(AustinCats)<span class="sc">*</span><span class="dv">100</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 50.77384</code></pre>
+</div>
+</div>
+<p>trabajaremos con sólo el 50% de nuestras observaciones.</p>
+</section>
+<section id="proceso-estadístico" class="level3">
+<h3 class="anchored" data-anchor-id="proceso-estadístico">Proceso estadístico</h3>
+<p>Como estamos controlando por <span class="math inline">\(A_i=1\)</span>, nuestro objetivo es calcular o aproximar la cantidad:</p>
+<p><span class="math display">\[p(D_i | A_i = 1)\]</span></p>
+<p><span class="math display">\[D_i | A_i = 1 \sim \exp(\lambda_i)\]</span> con: <span class="math display">\[\lambda_i = 1/\mu_i\]</span> <span class="math display">\[log \mu_i = \alpha_{Color_i}\]</span> <span class="math display">\[\alpha_{Color} \sim N(0,1)\]</span></p>
+</section>
+<section id="pruebas-del-proceso-estadístico" class="level3">
+<h3 class="anchored" data-anchor-id="pruebas-del-proceso-estadístico">Pruebas del proceso estadístico</h3>
+<p>El modelo en stan se puede escribir como sigue:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-17_7b28081268191ad1aa2946398b6ae473">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>modelo <span class="ot">&lt;-</span> <span class="fu">cmdstan_model</span>(<span class="st">"modelo.stan"</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(modelo)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>data{
+int N;
+// array[N] int adopted;
+vector[N] days_to_event;
+array[N] int color_id;
+}
+
+parameters{
+vector&lt;lower=0&gt;[2] alpha;
+}
+
+transformed parameters{
+vector&lt;lower=0&gt;[N] lambda;
+vector[N] mu;
+  for ( i in 1:N ) {
+    mu[i] = exp(alpha[color_id[i]]);
+    lambda[i] = 1/mu[i];
+  }
+}
+
+model{
+alpha ~ normal(0, 1);
+  // for (i in 1:N)
+  //   if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]);
+  for (i in 1:N)
+    days_to_event[i] ~ exponential(lambda[i]);
+}
+
+generated quantities{
+vector[N] pred;
+  for (i in 1:N)
+    pred[i] = exponential_rng(lambda[i]);
+}</code></pre>
+</div>
+</div>
+<p>Utilizaremos una muestra simulada de 1000 gatos de nuestro proceso generador de datos para hacerle pruebas a piori a nuestro modelo</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-18_6b7ace2777e529642058cb40eefa71dd">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>gatos_prueba <span class="ot">&lt;-</span> <span class="fu">sim_gatos_1</span>(<span class="at">lambda_negro =</span> <span class="fl">0.02</span>, <span class="at">lambda_otro =</span> <span class="fl">0.04</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-19_1affda97fc82e653686b5537b6051467">
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>data_list <span class="ot">=</span> <span class="fu">list</span>(</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(gatos_prueba),</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">days_to_event =</span> <span class="fu">as.numeric</span>(gatos_prueba<span class="sc">$</span>days_to_adoption),</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">color_id =</span> gatos_prueba<span class="sc">$</span>color_id</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-20_10a11f8c2a9065e5fb9c223a8c1b204d">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>fit_mod <span class="ot">&lt;-</span> modelo<span class="sc">$</span><span class="fu">sample</span>(</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> data_list,</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">init =</span> <span class="fl">0.1</span>,</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">step_size =</span> <span class="fl">0.01</span>,</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed =</span> <span class="dv">1234</span>,</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter_sampling =</span> <span class="dv">2000</span>,</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter_warmup =</span> <span class="dv">1000</span>,</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">refresh =</span> <span class="dv">200</span>,</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_messages =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">show_exceptions =</span> <span class="cn">FALSE</span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Finalmente podemos recuperar las lambdas:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-21_418437de775ef91d504a9dc502191811">
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>fit_mod<span class="sc">$</span><span class="fu">draws</span>(<span class="st">"alpha"</span>,<span class="at">format =</span> <span class="st">"df"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="fu">starts_with</span>(<span class="st">"alpha"</span>), <span class="at">names_to =</span> <span class="st">"variable"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(variable, value) <span class="sc">%&gt;%</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(variable) <span class="sc">%&gt;%</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">media =</span> <span class="fu">mean</span>(value),</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">q5 =</span> <span class="fu">quantile</span>(value,<span class="fl">0.05</span>),</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">q95 =</span> <span class="fu">quantile</span>(value,<span class="fl">0.95</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">separate</span>(variable, <span class="at">sep =</span> <span class="st">"[</span><span class="sc">\\</span><span class="st">[</span><span class="sc">\\</span><span class="st">]]"</span>, <span class="at">into=</span><span class="fu">c</span>(<span class="st">"variable"</span>, <span class="st">"alpha"</span>), <span class="at">extra=</span><span class="st">"drop"</span>, <span class="at">convert =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">lambda =</span> <span class="dv">1</span><span class="sc">/</span><span class="fu">exp</span>(media) )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 2 × 6
+  variable alpha media    q5   q95 lambda
+  &lt;chr&gt;    &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+1 alpha        1  3.89  3.76  4.02 0.0205
+2 alpha        2  3.25  3.20  3.31 0.0388</code></pre>
+</div>
+</div>
+</section>
+<section id="analizar-datos-y-resumir-resultados" class="level3">
+<h3 class="anchored" data-anchor-id="analizar-datos-y-resumir-resultados">Analizar datos y resumir resultados</h3>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-22_2db3229ec73ed72b4ae698a1a7906d6e">
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># data(AustinCats)</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="co"># AustinCats &lt;- AustinCats %&gt;%</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   select(color, date_in, date_out, out_event, days_to_event) %&gt;%</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   mutate(</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="co">#     pelaje = ifelse(color == "Black", "negro", "otro"),</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="co">#     id_pelaje = ifelse(color == "Black", 1, 2),</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a><span class="co">#     adoptado = ifelse(out_event == "Adoption", 1, 0),</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="co">#     censurado = ifelse(out_event != "Adoption", 1, 0)</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="co">#   )</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-23_b89f7fdd33c88ff3812285b3a12a4d5b">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># print(AustinCats)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-24_5fac6f735240ab978d7c8f531fcd54f6">
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># model_string &lt;- "</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="co"># data {</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   int&lt;lower=0&gt; N;  // Número total de observaciones</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   int&lt;lower=0&gt; J;  // Número de categorías de color de pelaje</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   int&lt;lower=1,upper=J&gt; color_id[N];  // Índice de color de pelaje para cada observación</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   int&lt;lower=0,upper=1&gt; adopted[N];  // Indicador de adopción para cada observación</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   vector&lt;lower=0&gt;[N] days_to_event;  // Días hasta el evento (adopción o censura) para cada observación</span></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="co"># }</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="co"># parameters {</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   vector[J] alpha;  // Intercepto para cada categoría de color de pelaje</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a><span class="co"># }</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a><span class="co"># model {</span></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a><span class="co">#   vector[N] lambda;  // Tasa de adopción para cada observación</span></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a><span class="co">#   </span></span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   alpha ~ normal(0, 1);  // Prior para los interceptos: distribución normal con media 0 y desviación estándar 1</span></span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   </span></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   for (i in 1:N) {</span></span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="co">#     lambda[i] = exp(-alpha[color_id[i]]);  // Tasa de adopción para cada observación, basada en el intercepto correspondiente al color de pelaje</span></span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a><span class="co">#   }</span></span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a><span class="co">#   </span></span>
+<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a><span class="co">#   days_to_event ~ exponential(lambda);  // Distribución exponencial para los días hasta el evento, con tasa lambda</span></span>
+<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a><span class="co"># }</span></span>
+<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a><span class="co"># "</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-25_ee3f24141386522d21b21e630a2f4323">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># stan_model &lt;- stan_model(model_code = model_string, model_name = "modelo_gatos")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-26_2906ae370d9d5366484a0a122463b478">
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="co"># data_list = list(</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   N = nrow(AustinCats),</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   J = length(unique(AustinCats$id_pelaje)),</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   color_id = AustinCats$id_pelaje,</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   adopted = AustinCats$adoptado,</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   days_to_event = AustinCats$days_to_event</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a><span class="co"># )</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-27_3dd929fb070b3bd8f349e58a4753fdc3">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># stan_fit &lt;- sampling(stan_model, data = data_list, chains = 3, iter = 2000, warmup = 1000, thin = 2, control = list(adapt_delta = 0.95))</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="checar-cómputos-y-resutado-del-modelo" class="level3">
+<h3 class="anchored" data-anchor-id="checar-cómputos-y-resutado-del-modelo">Checar cómputos y resutado del modelo</h3>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-28_cb32283fc95d9615bf51f0d4c71a9137">
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># print(stan_fit)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-29_d018130a656cb1d00bf6d985020d2d9b">
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># alpha_samples &lt;- extract(stan_fit, pars = "alpha")$alpha</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-30_f276cba9bffd7816429d65434686ac8d">
+<div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># traceplot(stan_fit, pars = "alpha")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Inferencia A partir de la distribución a posteriori de alpha, calculamos intervalos de credibilidad para evaluar la plausibilidad de los valores de los interceptos para cada categoría de color de pelaje, dada la evidencia de los datos. Los intervalos de credibilidad para cada elemento de alpha nos permitirán determinar si existe evidencia estadísticamente significativa de que el color del pelaje influye en el tiempo de adopción. Si los intervalos de credibilidad para las diferentes categorías de color no se superponen significativamente, esto sugeriría que hay una diferencia en los tiempos de adopción entre los gatos de diferentes colores.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-31_c82cf458b2d5c2eb04a2bc420760dd8c">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># library(posterior)</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a><span class="co"># library(ggplot2)</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a><span class="co"># alpha_df &lt;- as.data.frame(alpha_samples)</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a><span class="co"># colnames(alpha_df) &lt;- paste0("alpha[", 1:ncol(alpha_df), "]")</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a><span class="co"># alpha_long &lt;- tidyr::gather(alpha_df, key = "parameter", value = "value")</span></span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a><span class="co"># ggplot(alpha_long, aes(x = value, fill = parameter)) +</span></span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_density(alpha = 0.6) +</span></span>
+<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   xlab("Alpha") +</span></span>
+<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   ylab("Density") +</span></span>
+<span id="cb41-14"><a href="#cb41-14" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggtitle("Posterior Distributions of Alpha")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Intervalos de credibilidad:</p>
+<p>El intervalo de credibilidad del 95% para alpha[1] (gatos negros) es [3.30, 3.37]. El intervalo de credibilidad del 95% para alpha[2] (otros colores) es [3.20, 3.22].</p>
+<p>Estos intervalos no se superponen, lo que sugiere que hay una diferencia significativa en los tiempos de adopción entre los gatos negros y los gatos de otros colores.</p>
+<p>Medias posteriores:</p>
+<p>La media posterior de alpha[1] (gatos negros) es 3.33. La media posterior de alpha[2] (otros colores) es 3.21.</p>
+<p>Observaciones</p>
+<p>Es crucial reconocer que este modelo ignora los datos censurados (gatos no adoptados), lo que podría introducir sesgo en las estimaciones. Los gatos no adoptados podrían tener características distintas a los adoptados.</p>
+<p>Por lo tanto, aunque el Modelo 2 ofrece información valiosa, sus resultados deben interpretarse con precaución y complementarse con los del Modelo 1, que incorpora los datos censurados para un análisis más completo.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-32_965d6b1ed7e0f71b42fa4aeb43799e1d">
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># lambda_black &lt;- exp(-3.33)  # Tasa de adopción para gatos negros</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="co"># lambda_other &lt;- exp(-3.21)  # Tasa de adopción para gatos de otros colores</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a><span class="co"># calc_cdf_ccdf &lt;- function(lambda, t) {</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   cdf &lt;- 1 - exp(-lambda * t)</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   ccdf &lt;- exp(-lambda * t)</span></span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   return(data.frame(t = t, cdf = cdf, ccdf = ccdf))</span></span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a><span class="co"># }</span></span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a><span class="co"># t &lt;- seq(0, 100, length.out = 1000)  # Rango de tiempo (0 a 100 días)</span></span>
+<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a><span class="co"># cdf_ccdf_black &lt;- calc_cdf_ccdf(lambda_black, t)</span></span>
+<span id="cb42-12"><a href="#cb42-12" aria-hidden="true" tabindex="-1"></a><span class="co"># cdf_ccdf_other &lt;- calc_cdf_ccdf(lambda_other, t)</span></span>
+<span id="cb42-13"><a href="#cb42-13" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-14"><a href="#cb42-14" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-15"><a href="#cb42-15" aria-hidden="true" tabindex="-1"></a><span class="co"># library(ggplot2)</span></span>
+<span id="cb42-16"><a href="#cb42-16" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-17"><a href="#cb42-17" aria-hidden="true" tabindex="-1"></a><span class="co"># # Gráfico CDF</span></span>
+<span id="cb42-18"><a href="#cb42-18" aria-hidden="true" tabindex="-1"></a><span class="co"># cdf_plot &lt;- ggplot() +</span></span>
+<span id="cb42-19"><a href="#cb42-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line(data = cdf_ccdf_black, aes(x = t, y = cdf, color = "Black"), size = 1) +</span></span>
+<span id="cb42-20"><a href="#cb42-20" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line(data = cdf_ccdf_other, aes(x = t, y = cdf, color = "Other"), size = 1) +</span></span>
+<span id="cb42-21"><a href="#cb42-21" aria-hidden="true" tabindex="-1"></a><span class="co">#   labs(x = "Time (days)", y = "Cumulative Probability", title = "CDF of Adoption Time") +</span></span>
+<span id="cb42-22"><a href="#cb42-22" aria-hidden="true" tabindex="-1"></a><span class="co">#   scale_color_manual(name = "Coat Color", values = c("Black" = "black", "Other" = "blue"))</span></span>
+<span id="cb42-23"><a href="#cb42-23" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-24"><a href="#cb42-24" aria-hidden="true" tabindex="-1"></a><span class="co"># # Gráfico CCDF</span></span>
+<span id="cb42-25"><a href="#cb42-25" aria-hidden="true" tabindex="-1"></a><span class="co"># ccdf_plot &lt;- ggplot() +</span></span>
+<span id="cb42-26"><a href="#cb42-26" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line(data = cdf_ccdf_black, aes(x = t, y = ccdf, color = "Black"), size = 1) +</span></span>
+<span id="cb42-27"><a href="#cb42-27" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_line(data = cdf_ccdf_other, aes(x = t, y = ccdf, color = "Other"), size = 1) +</span></span>
+<span id="cb42-28"><a href="#cb42-28" aria-hidden="true" tabindex="-1"></a><span class="co">#   labs(x = "Time (days)", y = "Complementary Cumulative Probability", title = "CCDF of Adoption Time") +</span></span>
+<span id="cb42-29"><a href="#cb42-29" aria-hidden="true" tabindex="-1"></a><span class="co"># #   scale_color_manual(name = "Coat Color", values = c("Black" = "black", "Other" = "blue"))</span></span>
+<span id="cb42-30"><a href="#cb42-30" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb42-31"><a href="#cb42-31" aria-hidden="true" tabindex="-1"></a><span class="co"># # Mostrar los gráficos</span></span>
+<span id="cb42-32"><a href="#cb42-32" aria-hidden="true" tabindex="-1"></a><span class="co"># print(cdf_plot)</span></span>
+<span id="cb42-33"><a href="#cb42-33" aria-hidden="true" tabindex="-1"></a><span class="co"># print(ccdf_plot)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>La curva CDF muestra la probabilidad acumulada de que un gato sea adoptado antes o en un tiempo determinado. La curva CCDF muestra la probabilidad acumulada complementaria, es decir, la probabilidad de que un gato no sea adoptado antes o en un tiempo determinado</p>
+</section>
+</section>
+<section id="modelo-con-datos-censurados" class="level2">
+<h2 class="anchored" data-anchor-id="modelo-con-datos-censurados">Modelo con datos censurados</h2>
+<section id="modelo-generativo-1" class="level3">
+<h3 class="anchored" data-anchor-id="modelo-generativo-1">Modelo generativo</h3>
+<p>Para este caso tenemos el mismo modelo, sólo que esta vez no vamos a controlar por la variable <span class="math inline">\(A\)</span>.</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-33_126d14a3fe8269f61c4559f26511f593">
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">grViz</span>(<span class="st">"</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="st">digraph {</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="st">  graph [ranksep = 0.2, rankdir = LR]</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a><span class="st">  node [shape=plaintext]</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a><span class="st">  U [shape=circle]</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a><span class="st">  C</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a><span class="st">  D</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a><span class="st">  A</span></span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a><span class="st">  edge [minlen = 3]</span></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a><span class="st">  U -&gt; A</span></span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a><span class="st">  C -&gt; A</span></span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a><span class="st">  A -&gt; D</span></span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a><span class="st">"</span>, <span class="at">width =</span> <span class="dv">400</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div id="htmlwidget-16080f4e2cd962255454" style="width:100%;height:780px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-16080f4e2cd962255454">{"x":{"diagram":"\ndigraph {\n  graph [ranksep = 0.2, rankdir = LR]\n  node [shape=plaintext]\n  U [shape=circle]\n  C\n  D\n  A\n  edge [minlen = 3]\n  U -> A\n  C -> A\n  A -> D\n}\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-34_15a237d38fc6b3ede8e43ac486adae6d">
+<div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="co"># g1 &lt;- dagitty( "dag {     U -&gt; A     C -&gt; A     A -&gt; D }")</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a><span class="co"># impliedConditionalIndependencies(g1, type = "all.pairs")</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Para las adopciones sí observadas (no censuradas) usamos el mismo modelo:</p>
+<p><span class="math display">\[D_i\sim\exp(\lambda_i)\]</span> <span class="math display">\[p(D_i|\lambda_i)=\lambda_i\exp(-\lambda_iD_i)\]</span> Y para los datos datos censurados usamos la distribución de probabilidad acumulada complementaria (CCDF): probabilidad de que el evento NO haya ocurrido entes o en el tiempo x.</p>
+<p>La siguiente función simula una muestra de N gatos y regresa el tiempo para ser adoptados:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-35_867ad90721135d0e8de11766de200985">
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>sim_gatos_2 <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">lambda_negro =</span> <span class="fl">0.02</span>, <span class="at">lambda_otro =</span> <span class="fl">0.04</span>, <span class="at">N =</span> <span class="dv">1000</span>, <span class="at">p=</span><span class="fl">0.15</span>) {</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>  num_gatos_negros <span class="ot">&lt;-</span> <span class="fu">round</span>(N<span class="sc">*</span>p)</span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>  num_otros_gatos <span class="ot">&lt;-</span> N <span class="sc">-</span> num_gatos_negros</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>  black_days <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_gatos_negros, lambda_negro))</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>  other_days <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">rexp</span>(num_otros_gatos, lambda_otro))</span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>  days_to_event <span class="ot">=</span> <span class="fu">c</span>(black_days, other_days)</span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># simular datos NO censurados</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>  adoptado <span class="ot">=</span> <span class="fu">if_else</span>(days_to_event <span class="sc">&gt;=</span> <span class="dv">200</span>, <span class="dv">0</span>, <span class="dv">1</span>)</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>( <span class="at">days_to_adoption =</span> <span class="fu">c</span>(black_days, other_days),</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>          <span class="at">color_id=</span><span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">1</span>,num_gatos_negros),<span class="fu">rep</span>(<span class="dv">2</span>,num_otros_gatos)),</span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>          adoptado</span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Podemos hacer pruebas al modelo generativo en casos extremos:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-36_7d5f79f4cbf3ca67628453c7f8c6a0c4">
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="co"># set.seed(1234)</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sim_gatos_2</span>(<span class="at">p=</span><span class="fl">1.0</span>, <span class="at">N=</span><span class="dv">10</span>) <span class="co"># puros gatos negros</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 10 × 3
+   days_to_adoption color_id adoptado
+              &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+ 1               58        1        1
+ 2               22        1        1
+ 3               14        1        1
+ 4               58        1        1
+ 5              181        1        1
+ 6               86        1        1
+ 7               49        1        1
+ 8               54        1        1
+ 9               21        1        1
+10               22        1        1</code></pre>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-37_17bf4ec221c69813fa6705cf32a869d6">
+<div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sim_gatos_1</span>(<span class="at">p=</span><span class="fl">0.0</span>, <span class="at">N=</span><span class="dv">10</span>) <span class="co"># ningun gato negro</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 10 × 3
+   days_to_adoption color_id censored
+              &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+ 1               40        2        0
+ 2                5        2        0
+ 3               20        2        0
+ 4               21        2        0
+ 5                8        2        0
+ 6               20        2        0
+ 7               11        2        0
+ 8                6        2        0
+ 9               36        2        0
+10               55        2        0</code></pre>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-38_02440eb25e08a9024344bced1e1ec716">
+<div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">time =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">8</span>, <span class="dv">12</span>, <span class="dv">14</span>, <span class="dv">15</span>, <span class="dv">20</span>, <span class="dv">22</span>, <span class="dv">25</span>, <span class="dv">26</span>, <span class="dv">30</span>),</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">status =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>),</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">group =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"A"</span>, <span class="st">"A"</span>, <span class="st">"A"</span>, <span class="st">"B"</span>, <span class="st">"B"</span>, <span class="st">"B"</span>, <span class="st">"B"</span>, <span class="st">"B"</span>, <span class="st">"B"</span>)</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Function to calculate Kaplan-Meier survival estimates</span></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>calculate_km <span class="ot">&lt;-</span> <span class="cf">function</span>(time, status) {</span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>  n <span class="ot">&lt;-</span> <span class="fu">length</span>(time)</span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>  survival <span class="ot">&lt;-</span> <span class="fu">cumprod</span>(<span class="dv">1</span> <span class="sc">-</span> status <span class="sc">/</span> (n<span class="sc">:</span><span class="dv">1</span>))</span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">time =</span> time, <span class="at">survival =</span> survival)</span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate KM estimates for each group</span></span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a>km_data <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(group) <span class="sc">%&gt;%</span></span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(time) <span class="sc">%&gt;%</span></span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">status_rev =</span> <span class="fu">rev</span>(<span class="fu">cumsum</span>(<span class="fu">rev</span>(status)))) <span class="sc">%&gt;%</span></span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_modify</span>(<span class="sc">~</span> <span class="fu">calculate_km</span>(.x<span class="sc">$</span>time, .x<span class="sc">$</span>status_rev)) <span class="sc">%&gt;%</span></span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-22"><a href="#cb50-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the KM survival curve</span></span>
+<span id="cb50-23"><a href="#cb50-23" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(km_data, <span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> survival, <span class="at">color =</span> group)) <span class="sc">+</span></span>
+<span id="cb50-24"><a href="#cb50-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_step</span>() <span class="sc">+</span></span>
+<span id="cb50-25"><a href="#cb50-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Kaplan-Meier Survival Curve"</span>, <span class="at">x =</span> <span class="st">"Time"</span>, <span class="at">y =</span> <span class="st">"Survival Probability"</span>) <span class="sc">+</span></span>
+<span id="cb50-26"><a href="#cb50-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="Proyecto_Final_files/figure-html/unnamed-chunk-38-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="cantidad-a-estimar-1" class="level3">
+<h3 class="anchored" data-anchor-id="cantidad-a-estimar-1">Cantidad a estimar</h3>
+<p>Nuestro objetivo sigue siendo estimar el numero de días <span class="math inline">\(D\)</span> que le toma a un gato esperar para ser adoptado, esta vez utilizaremos tanto los datos censurados como no censurados.</p>
+</section>
+<section id="proceso-estadístico-1" class="level3">
+<h3 class="anchored" data-anchor-id="proceso-estadístico-1">Proceso estadístico</h3>
+<p><span class="math display">\[f(y)=\lambda e^{\lambda y}\]</span></p>
+<p><span class="math display">\[E[y]=\frac{1}{\lambda}\]</span></p>
+<p><span class="math display">\[D_i | A_i = 1 \sim \exp(\lambda_i)\]</span> <span class="math display">\[D_i | A_i = 0 \sim \exp-CCDF(\lambda_i)\]</span></p>
+<p><span class="math display">\[\lambda_i = 1/\mu_i\]</span></p>
+<p><span class="math display">\[log \mu_i = \alpha_{Color_i}\]</span> <span class="math display">\[\alpha_{Color} \sim N(0,1)\]</span></p>
+</section>
+<section id="pruebas-del-proceso-estadístico-1" class="level3">
+<h3 class="anchored" data-anchor-id="pruebas-del-proceso-estadístico-1">Pruebas del proceso estadístico</h3>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-39_2275ae68c958eaa83777e5b04b749978">
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>modelo <span class="ot">&lt;-</span> <span class="fu">cmdstan_model</span>(<span class="st">"modelo.stan"</span>)</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(modelo)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>data{
+int N;
+// array[N] int adopted;
+vector[N] days_to_event;
+array[N] int color_id;
+}
+
+parameters{
+vector&lt;lower=0&gt;[2] alpha;
+}
+
+transformed parameters{
+vector&lt;lower=0&gt;[N] lambda;
+vector[N] mu;
+  for ( i in 1:N ) {
+    mu[i] = exp(alpha[color_id[i]]);
+    lambda[i] = 1/mu[i];
+  }
+}
+
+model{
+alpha ~ normal(0, 1);
+  // for (i in 1:N)
+  //   if (adopted[i] == 0) target += exponential_lccdf(days_to_event[i] | lambda[i]);
+  for (i in 1:N)
+    days_to_event[i] ~ exponential(lambda[i]);
+}
+
+generated quantities{
+vector[N] pred;
+  for (i in 1:N)
+    pred[i] = exponential_rng(lambda[i]);
+}</code></pre>
+</div>
+</div>
+</section>
+<section id="analizar-los-datos-y-resumir-resultados" class="level3">
+<h3 class="anchored" data-anchor-id="analizar-los-datos-y-resumir-resultados">Analizar los datos, y resumir resultados</h3>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-40_e93e2119a1cc2d551bbad5d9eb9af9e2">
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co"># data_list_1 = list(</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   N = nrow(AustinCats),</span></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   adopted = AustinCats$adoptado,</span></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   days_to_event = as.numeric(AustinCats$days_to_event),</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   color_id = AustinCats$id_pelaje</span></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a><span class="co"># )</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-41_df10b8f5c22866929623adfd385086c3">
+<div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co"># fit_mod1 &lt;- modelo$sample(</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   data = data_list_1,</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   seed = 123,</span></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   chains = 2,</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   iter_sampling = 2000, </span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   iter_warmup = 1000,</span></span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   refresh = 200</span></span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   # show_messages = FALSE,</span></span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a><span class="co">#   # show_exceptions = FALSE</span></span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a><span class="co">#   )</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-42_a00242f3b3b8266af9a59aa6523eb4c3">
+<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co"># fit_mod1$summary()</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-43_8cbf2569f5336335298dca3c444f653a">
+<div class="sourceCode cell-code" id="cb56"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="co"># resumen_1 &lt;- fit_mod1$draws("mu_artist",format = "df") %&gt;% </span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   as_tibble() %&gt;% </span></span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   pivot_longer(cols = starts_with("mu_artist"), names_to = "variable") %&gt;% </span></span>
+<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   select(variable, value) %&gt;% </span></span>
+<span id="cb56-5"><a href="#cb56-5" aria-hidden="true" tabindex="-1"></a><span class="co">#   group_by(variable) %&gt;% </span></span>
+<span id="cb56-6"><a href="#cb56-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   summarise(media = mean(value),</span></span>
+<span id="cb56-7"><a href="#cb56-7" aria-hidden="true" tabindex="-1"></a><span class="co">#             q5 = quantile(value,0.05),</span></span>
+<span id="cb56-8"><a href="#cb56-8" aria-hidden="true" tabindex="-1"></a><span class="co">#             q95 = quantile(value,0.95)) %&gt;% </span></span>
+<span id="cb56-9"><a href="#cb56-9" aria-hidden="true" tabindex="-1"></a><span class="co">#   separate(variable, sep = "[\\[\\]]", into=c("variable", "artist_id"), extra="drop", convert = TRUE) </span></span>
+<span id="cb56-10"><a href="#cb56-10" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb56-11"><a href="#cb56-11" aria-hidden="true" tabindex="-1"></a><span class="co"># resumen_1 &lt;- left_join(artistas, resumen_1, by = "artist_id")</span></span>
+<span id="cb56-12"><a href="#cb56-12" aria-hidden="true" tabindex="-1"></a><span class="co"># </span></span>
+<span id="cb56-13"><a href="#cb56-13" aria-hidden="true" tabindex="-1"></a><span class="co"># resumen_1 %&gt;% </span></span>
+<span id="cb56-14"><a href="#cb56-14" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggplot(aes(x = reorder(artist, popularity), y = popularity), color = 'blue') +</span></span>
+<span id="cb56-15"><a href="#cb56-15" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point(aes(y = media), color = "red") +</span></span>
+<span id="cb56-16"><a href="#cb56-16" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_linerange(aes(ymin = q5, ymax = q95), color = 'red') +</span></span>
+<span id="cb56-17"><a href="#cb56-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   geom_point(aes(y = popularity, size = size), color = "black", alpha = 0.2) +</span></span>
+<span id="cb56-18"><a href="#cb56-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="checar-cómputos-y-resultado-del-modelo" class="level3">
+<h3 class="anchored" data-anchor-id="checar-cómputos-y-resultado-del-modelo">Checar cómputos y resultado del modelo</h3>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-44_153ec2e28867118170233b2d64f533e4">
+<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>black<span class="ot">&lt;-</span><span class="fu">round</span>(<span class="fu">rexp</span>(<span class="dv">1000</span>,<span class="fl">0.02</span>))</span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>other<span class="ot">&lt;-</span><span class="fu">round</span>(<span class="fu">rexp</span>(<span class="dv">1000</span>,<span class="fl">0.03</span>))</span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>d<span class="ot">&lt;-</span><span class="fu">data.frame</span>(<span class="at">days_to_event=</span><span class="fu">c</span>(black,other),<span class="at">color_id=</span><span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">1</span>,<span class="dv">1000</span>),<span class="fu">rep</span>(<span class="dv">2</span>,<span class="dv">1000</span>)))</span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>d<span class="ot">&lt;-</span> d <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">adopted =</span> <span class="fu">if_else</span>(days_to_event <span class="sc">&gt;=</span> <span class="dv">200</span>, <span class="dv">0</span>, <span class="dv">1</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-45_9cd660b1416aca635cb412192b91d07e">
+<div class="sourceCode cell-code" id="cb58"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>data_list_2 <span class="ot">=</span> <span class="fu">list</span>(</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d),</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">adopted =</span> d<span class="sc">$</span>adopted,</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">days_to_event =</span> <span class="fu">as.numeric</span>(d<span class="sc">$</span>days_to_event),</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">color_id =</span> d<span class="sc">$</span>color_id</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-46_742767482bebae692dc27f21c4b4ba8a">
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>fit_mod2 <span class="ot">&lt;-</span> modelo<span class="sc">$</span><span class="fu">sample</span>(</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> data_list_2,</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">init =</span> <span class="fl">0.1</span>,</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">step_size =</span> <span class="fl">0.01</span>,</span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed =</span> <span class="dv">1234</span>,</span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">2</span>,</span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter_sampling =</span> <span class="dv">2000</span>, </span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">iter_warmup =</span> <span class="dv">1000</span>,</span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">refresh =</span> <span class="dv">200</span></span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>  <span class="co"># show_messages = FALSE,</span></span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># show_exceptions = FALSE</span></span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Running MCMC with 2 sequential chains...
+
+Chain 1 Iteration:    1 / 3000 [  0%]  (Warmup) 
+Chain 1 Iteration:  200 / 3000 [  6%]  (Warmup) 
+Chain 1 Iteration:  400 / 3000 [ 13%]  (Warmup) 
+Chain 1 Iteration:  600 / 3000 [ 20%]  (Warmup) 
+Chain 1 Iteration:  800 / 3000 [ 26%]  (Warmup) 
+Chain 1 Iteration: 1000 / 3000 [ 33%]  (Warmup) 
+Chain 1 Iteration: 1001 / 3000 [ 33%]  (Sampling) 
+Chain 1 Iteration: 1200 / 3000 [ 40%]  (Sampling) 
+Chain 1 Iteration: 1400 / 3000 [ 46%]  (Sampling) 
+Chain 1 Iteration: 1600 / 3000 [ 53%]  (Sampling) 
+Chain 1 Iteration: 1800 / 3000 [ 60%]  (Sampling) 
+Chain 1 Iteration: 2000 / 3000 [ 66%]  (Sampling) 
+Chain 1 Iteration: 2200 / 3000 [ 73%]  (Sampling) 
+Chain 1 Iteration: 2400 / 3000 [ 80%]  (Sampling) 
+Chain 1 Iteration: 2600 / 3000 [ 86%]  (Sampling) 
+Chain 1 Iteration: 2800 / 3000 [ 93%]  (Sampling) 
+Chain 1 Iteration: 3000 / 3000 [100%]  (Sampling) 
+Chain 1 finished in 6.5 seconds.
+Chain 2 Iteration:    1 / 3000 [  0%]  (Warmup) 
+Chain 2 Iteration:  200 / 3000 [  6%]  (Warmup) 
+Chain 2 Iteration:  400 / 3000 [ 13%]  (Warmup) 
+Chain 2 Iteration:  600 / 3000 [ 20%]  (Warmup) 
+Chain 2 Iteration:  800 / 3000 [ 26%]  (Warmup) 
+Chain 2 Iteration: 1000 / 3000 [ 33%]  (Warmup) 
+Chain 2 Iteration: 1001 / 3000 [ 33%]  (Sampling) 
+Chain 2 Iteration: 1200 / 3000 [ 40%]  (Sampling) 
+Chain 2 Iteration: 1400 / 3000 [ 46%]  (Sampling) 
+Chain 2 Iteration: 1600 / 3000 [ 53%]  (Sampling) 
+Chain 2 Iteration: 1800 / 3000 [ 60%]  (Sampling) 
+Chain 2 Iteration: 2000 / 3000 [ 66%]  (Sampling) 
+Chain 2 Iteration: 2200 / 3000 [ 73%]  (Sampling) 
+Chain 2 Iteration: 2400 / 3000 [ 80%]  (Sampling) 
+Chain 2 Iteration: 2600 / 3000 [ 86%]  (Sampling) 
+Chain 2 Iteration: 2800 / 3000 [ 93%]  (Sampling) 
+Chain 2 Iteration: 3000 / 3000 [100%]  (Sampling) 
+Chain 2 finished in 6.5 seconds.
+
+Both chains finished successfully.
+Mean chain execution time: 6.5 seconds.
+Total execution time: 13.1 seconds.</code></pre>
+</div>
+</div>
+<p><strong>graficar dias vs proporcion de gatos</strong></p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-47_7310c45a5847471ca456a97d46a5b122">
+<div class="sourceCode cell-code" id="cb61"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a>fit_mod2<span class="sc">$</span><span class="fu">summary</span>(<span class="fu">c</span>(<span class="st">"alpha"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 2 × 10
+  variable  mean median     sd    mad    q5   q95  rhat ess_bulk ess_tail
+  &lt;chr&gt;    &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+1 alpha[1]  3.90   3.90 0.0323 0.0320  3.85  3.95  1.00    3367.    2134.
+2 alpha[2]  3.53   3.53 0.0318 0.0321  3.47  3.58  1.00    3849.    2788.</code></pre>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-49_f293ac7c55ea4736b3cd4e4ebe22d5b6">
+<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span><span class="sc">/</span><span class="fu">exp</span>(<span class="fl">3.88</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.02065083</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb65"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span><span class="sc">/</span><span class="fu">exp</span>(<span class="fl">3.47</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.03111703</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="modelo-con-datos-censurados-y-más-variables" class="level2">
+<h2 class="anchored" data-anchor-id="modelo-con-datos-censurados-y-más-variables">Modelo con datos censurados y más variables</h2>
+<section id="modelo-generativo-2" class="level3">
+<h3 class="anchored" data-anchor-id="modelo-generativo-2">Modelo generativo</h3>
+<p>Finalmente vamos a agregar la variable de raza a nuestro modelo:</p>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-50_7cda04ae2a577938208ccfadf1fda764">
+<div class="sourceCode cell-code" id="cb67"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="fu">grViz</span>(<span class="st">"</span></span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a><span class="st">digraph {</span></span>
+<span id="cb67-3"><a href="#cb67-3" aria-hidden="true" tabindex="-1"></a><span class="st">  graph [ranksep = 0.2, rankdir = LR]</span></span>
+<span id="cb67-4"><a href="#cb67-4" aria-hidden="true" tabindex="-1"></a><span class="st">  node [shape=plaintext]</span></span>
+<span id="cb67-5"><a href="#cb67-5" aria-hidden="true" tabindex="-1"></a><span class="st">  U [shape=circle]</span></span>
+<span id="cb67-6"><a href="#cb67-6" aria-hidden="true" tabindex="-1"></a><span class="st">  C</span></span>
+<span id="cb67-7"><a href="#cb67-7" aria-hidden="true" tabindex="-1"></a><span class="st">  D</span></span>
+<span id="cb67-8"><a href="#cb67-8" aria-hidden="true" tabindex="-1"></a><span class="st">  A</span></span>
+<span id="cb67-9"><a href="#cb67-9" aria-hidden="true" tabindex="-1"></a><span class="st">  edge [minlen = 3]</span></span>
+<span id="cb67-10"><a href="#cb67-10" aria-hidden="true" tabindex="-1"></a><span class="st">  U -&gt; A</span></span>
+<span id="cb67-11"><a href="#cb67-11" aria-hidden="true" tabindex="-1"></a><span class="st">  R -&gt; A</span></span>
+<span id="cb67-12"><a href="#cb67-12" aria-hidden="true" tabindex="-1"></a><span class="st">  C -&gt; A</span></span>
+<span id="cb67-13"><a href="#cb67-13" aria-hidden="true" tabindex="-1"></a><span class="st">  A -&gt; D</span></span>
+<span id="cb67-14"><a href="#cb67-14" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb67-15"><a href="#cb67-15" aria-hidden="true" tabindex="-1"></a><span class="st">"</span>, <span class="at">width =</span> <span class="dv">400</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div id="htmlwidget-678949839124520b106e" style="width:100%;height:780px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-678949839124520b106e">{"x":{"diagram":"\ndigraph {\n  graph [ranksep = 0.2, rankdir = LR]\n  node [shape=plaintext]\n  U [shape=circle]\n  C\n  D\n  A\n  edge [minlen = 3]\n  U -> A\n  R -> A\n  C -> A\n  A -> D\n}\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<div class="cell" data-hash="Proyecto_Final_cache/html/unnamed-chunk-51_5bd9849d7c3b482c890e8643f35fdba2">
+<div class="sourceCode cell-code" id="cb68"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>g1 <span class="ot">&lt;-</span> <span class="fu">dagitty</span>( <span class="st">"dag {     U -&gt; A     C -&gt; A     A -&gt; D  R-&gt;A }"</span>)</span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a><span class="fu">impliedConditionalIndependencies</span>(g1, <span class="at">type =</span> <span class="st">"all.pairs"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>C _||_ D | A
+C _||_ D | A, R
+C _||_ D | A, U
+C _||_ D | A, R, U
+C _||_ R
+C _||_ R | U
+C _||_ U
+C _||_ U | R
+D _||_ R | A
+D _||_ R | A, C
+D _||_ R | A, U
+D _||_ R | A, C, U
+D _||_ U | A
+D _||_ U | A, C
+D _||_ U | A, R
+D _||_ U | A, C, R
+R _||_ U
+R _||_ U | C</code></pre>
+</div>
+</div>
+</section>
+<section id="cantidad-a-estimar-2" class="level3">
+<h3 class="anchored" data-anchor-id="cantidad-a-estimar-2">Cantidad a estimar</h3>
+</section>
+<section id="proceso-estadístico-2" class="level3">
+<h3 class="anchored" data-anchor-id="proceso-estadístico-2">Proceso estadístico</h3>
+</section>
+<section id="pruebas-del-proceso-estadístico-2" class="level3">
+<h3 class="anchored" data-anchor-id="pruebas-del-proceso-estadístico-2">Pruebas del proceso estadístico</h3>
+</section>
+<section id="analizar-los-datos-y-resumir-resultados-1" class="level3">
+<h3 class="anchored" data-anchor-id="analizar-los-datos-y-resumir-resultados-1">Analizar los datos y resumir resultados</h3>
+</section>
+<section id="checar-cómputos-y-resultado-del-modelo-1" class="level3">
+<h3 class="anchored" data-anchor-id="checar-cómputos-y-resultado-del-modelo-1">Checar cómputos y resultado del modelo</h3>
+</section>
+</section>
+</section>
+<section id="conclusiones" class="level1">
+<h1>Conclusiones</h1>
+<ul>
+<li><p>Para el modelo sin datos censurados</p></li>
+<li><p>El modelo con datos censurados y no censurados</p></li>
+<li><p>El tercer modelo que además de tomar en cuenta los datos censurados añade as variables de</p></li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
