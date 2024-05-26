@@ -4,6 +4,8 @@
 
 Este proyecto, realizado para la materia de Métodos Analíticos, investiga si el color del pelaje de un gato influye en el tiempo que tarda en ser adoptado en un refugio de animales. Utilizamos datos del refugio de Austin, Texas, y modelos de supervivencia para abordar esta pregunta.
 
+[Presentación](https://docs.google.com/presentation/d/18lL-8XWcspopfLmuYaP_wnypP6KRHQ3d4iEW54C6NfU/edit?usp=sharing).
+
 ## Motivación ✨
 
 Los gatos negros a menudo enfrentan desafíos adicionales para encontrar un hogar debido a supersticiones y estereotipos negativos. Este análisis busca proporcionar evidencia empírica sobre si estos gatos realmente experimentan tiempos de espera más largos para ser adoptados.
