@@ -32,7 +32,9 @@ library(dagitty)
 library(ggdist)
 library(cmdstanr)
 library(rstan)
-
+library(dplyr)
+library(purrr)
+library(bayesplot)
 ```
 
 ```{r}
@@ -800,13 +802,14 @@ data_list_2 = list(
 )
 ```
 
+
 ```{r}
 fit_mod2 <- modelo$sample(
   data = data_list_2,
   init = 0.1,
   step_size = 0.01,
   seed = 1234,
-  chains = 2,
+  chains = 3,
   iter_sampling = 2000, 
   iter_warmup = 1000,
   refresh = 200
@@ -828,9 +831,186 @@ fit_mod2$summary(c("alpha"))
 
 Que son muy cercamos a los valores iniciales para este caso: 0.01 y 0.02
 
-### Checar cómputos y resultado del modelo
+### Analizar datos y resumir resultados
+
+Ahora que terminamos de revisar nuestros supuestos *a priori y a posterior,* utilizaremos los datos observados de adopciones en nuestra base de datos completa.
+
+```{r}
+# Pasamos los datos observados a ser evaluados en nuestro modelo
+data_list_2b = list(
+  N = nrow(AustinCats),
+  adopted = AustinCats$adoptado,
+  days_to_event = as.numeric(AustinCats$days_to_event),
+  color_id = AustinCats$id_pelaje
+)
+```
+
+```{r}
+fit_mod2 <- modelo$sample(
+  data = data_list_2b,
+  init = 0.1,
+  step_size = 0.008,
+  seed = 1234,
+  chains = 3,
+  iter_sampling = 2000, 
+  iter_warmup = 1000,
+  refresh = 200
+  # show_messages = FALSE,
+  # show_exceptions = FALSE
+  )
+```
+
+```{r}
+# Paso 1: Extraer muestras y calcular intervalos de credibilidad
+posterior_samples <- fit_mod2$draws("alpha",format = "df") %>% 
+  as_tibble() %>% 
+  pivot_longer(cols = starts_with("alpha"), names_to = "variable") %>% 
+  select(variable, value) %>% 
+  separate(variable, sep = "[\\[\\]]", into=c("variable", "alpha"), extra="drop", convert = TRUE) %>% 
+  select(alpha,value)
+
+```
 
 
+```{r}
+# Convertir las muestras a un data frame para facilitar la manipulación
+posterior_df <- as.data.frame(posterior_samples)
+
+# Calcular los intervalos de credibilidad (High Density Intervals, HDIs)
+library(coda)
+
+hdi <- apply(posterior_df, 2, function(x) {
+  HPDinterval(as.mcmc(x), prob = 0.89)
+})
+
+# Calcular la media de los parámetros
+means <- apply(posterior_df, 2, mean)
+
+# Preparar los datos para ggplot2
+plot_data <- data.frame(
+  parameter = factor(1:ncol(posterior_df), labels = paste0("alpha[", 1:ncol(posterior_df), "]")),
+  mean = means,
+  hdi_lower = hdi[1, ],
+  hdi_upper = hdi[2, ]
+)
+
+# Paso 2: Crear el gráfico forest plot
+library(ggplot2)
+
+ggplot(plot_data, aes(x = parameter, y = mean)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = hdi_lower, ymax = hdi_upper), width = 0.2) +
+  coord_flip() +  # Girar el gráfico para que sea horizontal
+  labs(x = "", y = "days to adoption") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 10)
+  )
+
+```
+
+
+```{r}
+# Convertir las muestras a un data frame para facilitar la manipulación
+posterior_df <- as.data.frame(posterior_samples)
+
+# Añadir nombres de columnas para los colores de los gatos
+colnames(posterior_df) <- c("Black", "Other")
+
+# Paso 2: Preparar los datos para `ggplot2`
+library(tidyr)
+
+# Convertir el data frame a formato largo
+posterior_long <- posterior_df %>%
+  pivot_longer(cols = everything(), names_to = "cat_color", values_to = "alpha")
+
+# Asignar colores para las categorías
+posterior_long$color <- ifelse(posterior_long$cat_color == "Black", "black", "blue")
+
+# Paso 3: Crear los gráficos de densidad con `ggplot2`
+library(ggplot2)
+
+# Crear el gráfico
+ggplot(posterior_long, aes(x = alpha, fill = cat_color, color = cat_color)) +
+  geom_density(alpha = 0.5) +
+  scale_color_manual(values = c("Black" = "black", "Other" = "blue")) +
+  scale_fill_manual(values = c("Black" = "black", "Other" = "blue")) +
+  labs(x = "waiting time", y = "density") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+
+```
+
+
+```{r}
+# Generar una secuencia de días
+days_until_adoption_ <- seq(1, 100, by = 1)
+n_posterior_samples <- 25
+
+# Seleccionar muestras posteriores para las categorías de colores
+black_samples <- posterior_samples$alpha[posterior_samples$alpha == 1][1:n_posterior_samples]
+other_samples <- posterior_samples$alpha[posterior_samples$alpha == 2][1:n_posterior_samples]
+
+# Crear un data frame para ggplot2
+plot_data <- data.frame()
+
+# Agregar muestras de 'Black'
+for (alpha in black_samples) {
+  plot_data <- rbind(plot_data, data.frame(
+    days = days_until_adoption_,
+    fraction = exp(-days_until_adoption_ / alpha),
+    cat_color = "Black",
+    alpha_value = alpha
+  ))
+}
+
+# Agregar muestras de 'Other'
+for (alpha in other_samples) {
+  plot_data <- rbind(plot_data, data.frame(
+    days = days_until_adoption_,
+    fraction = exp(-days_until_adoption_ / alpha),
+    cat_color = "Other",
+    alpha_value = alpha
+  ))
+}
+
+# Convertir cat_color a factor para ggplot2
+plot_data$cat_color <- factor(plot_data$cat_color, levels = c("Black", "Other"))
+
+# Crear el gráfico
+library(ggplot2)
+
+ggplot(plot_data, aes(x = days, y = fraction, group = alpha_value, color = cat_color)) +
+  geom_line(alpha = 0.25) +
+  scale_color_manual(values = c("Black" = "black", "Other" = "blue")) +
+  labs(x = "days until adoption", y = "fraction") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+
+```
+
+
+
+### Revisar cómputos y resultado del modelo
+
+Las cadenas, `rhat` y parámetros `ess`, lucen adecuados:
+
+```{r}
+fit_mod2$summary(c("alpha"))
+```
+
+```{r}
+mcmc_trace(fit_mod2$draws(c("alpha")), palette = "viridis")
+```
+
+
+```{r}
+sims_alpha_post_tbl <- fit_mod2 %>% 
+  as_draws_df() %>% 
+  select(alpha)
+```
 
 
 
@@ -840,8 +1020,7 @@ Que son muy cercamos a los valores iniciales para este caso: 0.01 y 0.02
 ## Propuesta con censurado Gabs, directo de repo de McElreath
 
 ```{r}
-library(dplyr)
-library(purrr)
+
 CATS <- AustinCats
 CAT_COLOR_ID <- as.integer(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
 CAT_COLOR <- levels(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
@@ -903,147 +1082,6 @@ fit <- stan(model_code = stan_code, data = data_list, iter = 2000, chains = 4)
 ```{r}
 print(fit)
 ```
-
-```{r}
-# Paso 1: Extraer muestras y calcular intervalos de credibilidad
-
-# Supongamos que ya tienes el objeto fit después de ajustar el modelo
-posterior_samples <- rstan::extract(fit, pars = "alpha")$alpha
-
-# Convertir las muestras a un data frame para facilitar la manipulación
-posterior_df <- as.data.frame(posterior_samples)
-
-# Calcular los intervalos de credibilidad (High Density Intervals, HDIs)
-library(coda)
-
-hdi <- apply(posterior_df, 2, function(x) {
-  HPDinterval(as.mcmc(x), prob = 0.89)
-})
-
-# Calcular la media de los parámetros
-means <- apply(posterior_df, 2, mean)
-
-# Preparar los datos para ggplot2
-plot_data <- data.frame(
-  parameter = factor(1:ncol(posterior_df), labels = paste0("alpha[", 1:ncol(posterior_df), "]")),
-  mean = means,
-  hdi_lower = hdi[1, ],
-  hdi_upper = hdi[2, ]
-)
-
-# Paso 2: Crear el gráfico forest plot
-
-library(ggplot2)
-
-ggplot(plot_data, aes(x = parameter, y = mean)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = hdi_lower, ymax = hdi_upper), width = 0.2) +
-  coord_flip() +  # Girar el gráfico para que sea horizontal
-  labs(x = "", y = "days to adoption") +
-  theme_minimal() +
-  theme(
-    axis.text.y = element_text(size = 8),
-    axis.title.y = element_blank(),
-    axis.title.x = element_text(size = 10)
-  )
-
-```
-
-```{r}
-# Paso 1: Extraer las muestras de `alpha` para cada categoría
-
-# Extraer las muestras del objeto `fit`
-posterior_samples <- rstan::extract(fit, pars = "alpha")$alpha
-
-# Convertir las muestras a un data frame para facilitar la manipulación
-posterior_df <- as.data.frame(posterior_samples)
-
-# Añadir nombres de columnas para los colores de los gatos
-colnames(posterior_df) <- c("Black", "Other")
-
-# Paso 2: Preparar los datos para `ggplot2`
-
-library(tidyr)
-
-# Convertir el data frame a formato largo
-posterior_long <- posterior_df %>%
-  pivot_longer(cols = everything(), names_to = "cat_color", values_to = "alpha")
-
-# Asignar colores para las categorías
-posterior_long$color <- ifelse(posterior_long$cat_color == "Black", "black", "blue")
-
-# Paso 3: Crear los gráficos de densidad con `ggplot2`
-
-library(ggplot2)
-
-# Crear el gráfico
-ggplot(posterior_long, aes(x = alpha, fill = cat_color, color = cat_color)) +
-  geom_density(alpha = 0.5) +
-  scale_color_manual(values = c("Black" = "black", "Other" = "blue")) +
-  scale_fill_manual(values = c("Black" = "black", "Other" = "blue")) +
-  labs(x = "waiting time", y = "density") +
-  theme_minimal() +
-  theme(legend.title = element_blank())
-
-```
-
-```{r}
-# Suponemos que el modelo ya se ha ajustado y tenemos el objeto fit
-
-# Generar una secuencia de días
-days_until_adoption_ <- seq(1, 100, by = 1)
-n_posterior_samples <- 25
-
-# Extraer las muestras del parámetro alpha del objeto fit
-posterior_samples <- rstan::extract(fit, pars = "alpha")$alpha
-
-# Convertir las muestras a un data frame para facilitar la manipulación
-posterior_df <- as.data.frame(posterior_samples)
-colnames(posterior_df) <- c("Black", "Other")
-
-# Seleccionar muestras posteriores para las categorías de colores
-black_samples <- posterior_df$Black[1:n_posterior_samples]
-other_samples <- posterior_df$Other[1:n_posterior_samples]
-
-# Crear un data frame para ggplot2
-plot_data <- data.frame()
-
-# Agregar muestras de 'Black'
-for (alpha in black_samples) {
-  plot_data <- rbind(plot_data, data.frame(
-    days = days_until_adoption_,
-    fraction = exp(-days_until_adoption_ / alpha),
-    cat_color = "Black",
-    alpha_value = alpha
-  ))
-}
-
-# Agregar muestras de 'Other'
-for (alpha in other_samples) {
-  plot_data <- rbind(plot_data, data.frame(
-    days = days_until_adoption_,
-    fraction = exp(-days_until_adoption_ / alpha),
-    cat_color = "Other",
-    alpha_value = alpha
-  ))
-}
-
-# Convertir cat_color a factor para ggplot2
-plot_data$cat_color <- factor(plot_data$cat_color, levels = c("Black", "Other"))
-
-# Crear el gráfico
-library(ggplot2)
-
-ggplot(plot_data, aes(x = days, y = fraction, group = alpha_value, color = cat_color)) +
-  geom_line(alpha = 0.25) +
-  scale_color_manual(values = c("Black" = "black", "Other" = "blue")) +
-  labs(x = "days until adoption", y = "fraction") +
-  theme_minimal() +
-  theme(legend.title = element_blank())
-
-```
-
-## con breed, pero queda raro, no me convence
 
 ## Modelo con datos censurados y más variables
 
