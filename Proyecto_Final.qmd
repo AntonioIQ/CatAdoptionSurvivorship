@@ -553,6 +553,99 @@ print(cdf_plot)
 
 La curva CDF muestra la probabilidad acumulada de que un gato sea adoptado antes o en un tiempo determinado. La curva CCDF muestra la probabilidad acumulada complementaria, es decir, la probabilidad de que un gato no sea adoptado antes o en un tiempo determinado.
 
+
+
+```{r}
+# Simula parámetros de la posterior
+posterior_samples <- rstan::extract(stan_fit)$alpha
+
+# Función para simular datos basada en parámetros
+simulate_data <- function(alpha, n) {
+  lambda <- exp(-alpha)
+  rexp(n, rate = lambda)
+}
+
+# Simula nuevas observaciones de los mismos tamaños que tus datos observados
+simulated_data <- sapply(posterior_samples, simulate_data, n = length(AustinCats_model_1$days_to_event))
+
+# Convierte a formato largo para gráficos
+simulated_data_long <- as.data.frame(t(simulated_data))
+colnames(simulated_data_long) <- seq_len(ncol(simulated_data_long))
+simulated_data_long <- pivot_longer(simulated_data_long, cols = everything(), names_to = "simulation", values_to = "days_to_event_sim")
+
+# Añade los datos observados para comparación
+simulated_data_long$observed <- rep(AustinCats_model_1$days_to_event, times = ncol(simulated_data))
+
+# Gráfico de comparación
+ggplot(simulated_data_long) +
+  geom_density(aes(x = days_to_event_sim, fill = "Simulated"), alpha = 0.5) +
+  geom_density(aes(x = observed, fill = "Observed"), alpha = 0.5) +
+  labs(x = "Days to Event", y = "Density") +
+  guides(fill = guide_legend(title = "Type"))
+```
+
+```{r}
+
+# Filtrando para días hasta 100 para una mejor visualización
+filtered_data <- simulated_data_long %>%
+  filter(days_to_event_sim <= 100, observed <= 100)
+
+# Gráfico de densidades comparando simulado y observado hasta 100 días
+ggplot(filtered_data) +
+  geom_density(aes(x = days_to_event_sim, fill = "Simulated"), alpha = 0.5) +
+  geom_density(aes(x = observed, fill = "Observed"), alpha = 0.5) +
+  labs(x = "Days to Event (up to 100 days)", y = "Density") +
+  guides(fill = guide_legend(title = "Type")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"), 
+        plot.background = element_rect(fill = "white"),
+        legend.position = "right")
+
+```
+
+```{r}
+# Convertir alpha_samples en un data frame
+alpha_samples_df <- as.data.frame(alpha_samples)
+
+# Renombrar las columnas del data frame
+colnames(alpha_samples_df) <- paste0("alpha", 1:ncol(alpha_samples_df))
+
+# Función para simular datos de la predictiva posterior
+sim_pred_post <- function(rep, sims_tbl, days_to_event) {
+  sims_tbl |> 
+    slice_sample(n = nrow(AustinCats_model_1)) |> 
+    mutate(rep = as.character(rep),  # Convertir rep a carácter
+           days_to_event_sim = rexp(n(), rate = 1/exp(sims_tbl$alpha1))) |> 
+    select(rep, days_to_event_sim)
+}
+
+# Generar simulaciones de la predictiva posterior
+set.seed(123)
+sims_check_post <- map_dfr(1:12, ~ sim_pred_post(.x, sims_tbl = alpha_samples_df, 
+                                                 days_to_event = AustinCats_model_1$days_to_event))
+
+# Preparar datos para graficar
+plot_data <- sims_check_post |>
+  mutate(type = "Simulated") |>
+  bind_rows(AustinCats_model_1 |> 
+              mutate(rep = "Observed", days_to_event_sim = days_to_event, type = "Observed")) |>
+  filter(days_to_event_sim < 200)  # Ajusta el límite superior según tus datos
+
+# Gráficas múltiples
+ggplot(plot_data, aes(x = days_to_event_sim, color = type)) +
+  geom_density(alpha = 0.5) +
+  xlim(0, 200) +  # Ajusta el límite superior según tus datos
+  facet_wrap(~ rep, ncol = 4) +  # Ajusta ncol según el número de gráficas por fila
+  labs(x = "Days to Event", y = "Density", color = "Type") +
+  scale_color_manual(values = c("Simulated" = "skyblue", "Observed" = "orange")) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ggtitle("Comparación de los datos simulados con los observados")
+```
+
+
+
+
 ## Modelo con datos censurados
 
 ### Modelo generativo
