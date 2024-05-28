@@ -1007,81 +1007,16 @@ mcmc_trace(fit_mod2$draws(c("alpha")), palette = "viridis")
 
 
 ```{r}
-sims_alpha_post_tbl <- fit_mod2 %>% 
-  as_draws_df() %>% 
-  select(alpha)
+# pred_samples <- fit_mod2$draws("pred",format = "df") %>% 
+#   as_tibble() %>% 
+#   pivot_longer(cols = starts_with("pred"), names_to = "variable") %>% 
+#   select(variable, value) %>% 
+#   separate(variable, sep = "[\\[\\]]", into=c("variable", "pred"), extra="drop", convert = TRUE) %>% 
+#   select(alpha,value)
 ```
 
 
 
-
-
-
-## Propuesta con censurado Gabs, directo de repo de McElreath
-
-```{r}
-
-CATS <- AustinCats
-CAT_COLOR_ID <- as.integer(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
-CAT_COLOR <- levels(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
-
-ADOPTED_ID <- as.integer(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
-ADOPTED <- levels(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
-
-DAYS_TO_ADOPTION <- as.numeric(CATS$days_to_event)
-LAMBDA <- 50
-```
-
-```{r}
-library(rstan)
-
-stan_code <- "
-data {
-  int<lower=1> N;               // number of data points
-  int<lower=1> K;               // number of categories
-  real<lower=0> days_to_adoption[N]; // time to event
-  int<lower=1, upper=K> cat_color_id[N]; // categorical color id
-  real<lower=0> lambda;         // rate parameter
-  real<lower=0> right_censoring[N];  // right censoring times
-}
-
-parameters {
-  vector<lower=0>[K] alpha;     // scale parameters
-}
-
-model {
-  real gamma = 1 / lambda;
-  alpha ~ exponential(gamma);   // prior for alpha
-  for (n in 1:N) {
-    if (days_to_adoption[n] == right_censoring[n]) {
-      target += exponential_lccdf(right_censoring[n] | 1 / alpha[cat_color_id[n]]);
-    } else {
-      days_to_adoption[n] ~ exponential(1 / alpha[cat_color_id[n]]);
-    }
-  }
-}
-"
-
-# Datos para el modelo
-right_censoring <- ifelse(ADOPTED_ID == 1, max(DAYS_TO_ADOPTION), DAYS_TO_ADOPTION)
-
-data_list <- list(
-  N = length(DAYS_TO_ADOPTION),
-  K = length(CAT_COLOR),
-  days_to_adoption = DAYS_TO_ADOPTION,
-  cat_color_id = CAT_COLOR_ID,
-  lambda = LAMBDA,
-  right_censoring = right_censoring
-)
-
-# Compilar y ajustar el modelo
-fit <- stan(model_code = stan_code, data = data_list, iter = 2000, chains = 4)
-
-```
-
-```{r}
-print(fit)
-```
 
 ## Modelo con datos censurados y más variables
 
