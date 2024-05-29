@@ -1,0 +1,1489 @@
+---
+title: Análisis de Supervivencia con adopciones de gatos
+date: 2024-05-29
+authors:
+  - Sara Luz Valenzuela Camacho
+  - Gabriela Patricia Venegas Sánchez
+  - José Antonio Tapia Godínez
+format: html
+execute:
+  cache: true
+---
+
+# Proyecto Final
+
+## Planteamiento
+
+En el presente trabajo analizamos un problema tomado de las notas del curso de Statistical Rethinking del 2019 de McElreath. El objetivo es determinar si a los gatos de color negro les toma más tiempo ser adoptados.
+
+Los modelos utilizados para tratar este tipo de información se conocen como modelos de supervivencia. Estos modelos estadísticos se emplean cuando la variable objetivo que se desea predecir es el tiempo transcurrido hasta que ocurre un evento de interés. Los eventos de interés son eventos discretos (contables) y queremos saber la taza a la que suceden estos eventos. Por lo tanto, son todos valores reales positivos.
+
+Para este proyecto trabajaremos con la base de datos `AustinCats` de la librería `rethinking`.
+
+La base de datos cuenta con 22,356 registros individuales de gatos que han pasado por el "Centro de Animales de Austin, TX" y contiene 9 variables relacionadas con los gatos y su paso por el refugio.
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+library(rethinking)
+library(tidyverse)
+library(DiagrammeR)
+library(broom)
+library(distributional)
+library(dagitty)
+library(ggdist)
+library(cmdstanr)
+library(rstan)
+library(dplyr)
+library(purrr)
+library(bayesplot)
+```
+
+```{r}
+data(AustinCats)
+glimpse(AustinCats)
+```
+
+Las variables que nos interesan son color (`color`), raza (`breed`), edad a la que entró (`intake_age`), motivo de la salida (`out_event`) y días para el evento de salida (`days_to_event`).
+
+Para el color, dado que hay 204 tipos en la base y para el propósito de nuestro proyecto, los clasificaremos solo en "negro" y "otro":
+
+```{r}
+# Proporción de gatos negros vs. total.
+AustinCats <- AustinCats %>% 
+  mutate(pelaje = ifelse(color == "Black", "negro", "otro"),
+         id_pelaje  = ifelse(color == "Black", 1, 2)) 
+
+color_gatos <- AustinCats %>% 
+  count(pelaje) %>% 
+  mutate(porcentaje = round(100*n/sum(n)))
+
+color_gatos %>%
+  ggplot(aes(y = pelaje)) +
+  geom_col(aes(x = porcentaje, fill = pelaje)) +
+  geom_text(aes(x = porcentaje, label = paste0(porcentaje, "%")), 
+            position = position_stack(vjust = 0.5), 
+            color = "white") +
+  scale_fill_manual(values = c("negro" = "black", "otro" = "antiquewhite4")) +
+  guides(fill = FALSE) +
+  labs(x = "Porcentaje", y = "Pelaje")
+```
+
+De igual forma, para raza los clasificaremos en "doméstico" si son de la raza `Domestic Shorthair Mix`, y "otro" para las demás razas.
+
+```{r}
+# Proporción de gatos domésticos de pelaje corto vs. total.
+AustinCats <- AustinCats %>% 
+  mutate(raza = ifelse(breed == "Domestic Shorthair Mix", "domestico", "otro"),
+         id_raza  = ifelse(raza == "domestico", 1, 2)) 
+
+raza_gatos <- AustinCats %>% 
+  count(raza) %>% 
+  mutate(porcentaje = round(100*n/sum(n)))
+
+raza_gatos %>%
+  ggplot(aes(y = raza)) +
+  geom_col(aes(x = porcentaje, fill = raza)) +
+  geom_text(aes(x = porcentaje, label = paste0(porcentaje, "%")), 
+            position = position_stack(vjust = 0.5), 
+            color = "white") +
+  scale_fill_manual(values = c("domestico" = "cyan3", "otro" = "blue1")) +
+  guides(fill = FALSE) +
+  labs(x = "Porcentaje", y = "Raza")
+```
+
+El evento de salida, se refiere a la razón por la que los gatos salieron del refugio, en este caso la gran mayoría es adoptado.
+
+```{r}
+# Conteo por evento de salida
+AustinCats %>% count(out_event)
+```
+
+Siguiendo el tratamiento propuesto por McElreath, crearemos dos variables a partir de la variable de evento de salida: "adoptado", que será binaria, dependiendo de si fue adoptado o no, y la de "censurado", igualmente binaria y opuesta a la de "adoptado".
+
+```{r}
+# Creación de variable adoptado 1:sí, 0:no.
+# Creación de variable censurado 0:no adoptado , 1:sí adoptado.
+# Creación de variable salida adopción, otro.
+AustinCats <- AustinCats %>% 
+  mutate(adoptado  = ifelse(out_event == "Adoption", 1, 0),
+         censurado = ifelse(out_event != "Adoption", 1, 0))
+
+gatos_adoptados <- AustinCats %>% 
+  mutate(salida  = ifelse(out_event == "Adoption", "adopción", "otro")) %>% 
+  count(salida) %>% 
+  mutate(porcentaje = 100*n/sum(n))
+
+# Proporción de gatos adoptados vs. otro.
+gatos_adoptados %>% 
+  ggplot(aes(y = salida)) +
+  geom_col(aes(x = porcentaje, fill = factor(salida))) +
+  scale_fill_manual(values = c("adopción" = "green3", "otro" = "#FF6A6A")) +
+  guides(fill = FALSE)
+```
+
+En los análisis de supervivencia, los `datos censurados` son aquellos en los que no se conoce el tiempo exacto en que ocurrió el evento de interés, sino que solo se sabe que ocurrió dentro de un cierto periodo de tiempo.
+
+Existen dos tipos principales de censura:
+
+1.  Censura por la izquierda: Se produce cuando el evento de interés ha tenido lugar antes del punto de inicio del estudio. En este caso, el tiempo de censura será el tiempo de inicio del estudio, ya que no se conoce el tiempo exacto en que ocurrió el evento antes de ese punto.
+
+2.  Censura por la derecha: Ocurre cuando el estudio se termina en un tiempo fijo predeterminado, y no se ha observado el evento de interés para algunos individuos antes de finalizar el estudio. En este caso, se conoce el tiempo mínimo de supervivencia, pero no el tiempo exacto en que ocurrirá el evento.
+
+En este caso, tenemos datos censurados únicamente por la derecha. No hay censurados por la izquierda, ya que todos los gatos cuentan con una fecha de entrada al refugio (`date_in`). Los censurados por la derecha son aquellos que por alguna u otra razón salieron del refugio sin ser adoptados, o que siguen en el refugio esperando ser adoptados.
+
+```{r}
+# Contar el número de valores NA en la columna date_in.
+date_in_na <- sum(is.na(AustinCats$date_in))
+print(date_in_na)
+```
+
+No podemos ignorar los datos censurados, ya que lo que queremos modelar es el tiempo de espera antes de que un evento ocurra (muerte, adopción, etc.), y si quitamos estos datos tendríamos un error de sesgo. Como se ve en la siguiente gráfica.
+
+```{r}
+# Distribución de la variable days_to_event, agrupado por la variable censurado.
+AustinCats %>% 
+  mutate(censurado = factor(censurado)) %>% 
+  filter(days_to_event < 200) %>% 
+  
+  ggplot(aes(x = days_to_event, y = censurado)) +
+  
+  stat_halfeye(.width = .5, fill="red", height = 4) +
+  scale_y_discrete(NULL, labels = c("censurado == 0", "censurado == 1")) +
+  coord_cartesian(ylim = c(1.5, 5.1)) +
+  theme(axis.ticks.y = element_blank())
+```
+
+La distribución de la variable, `days_to_event,` luce muy diferente según si los datos fueron censurados o no. Sin embargo, como ejemplo académico haremos un primer modelo sin datos censurados.
+
+## Modelo sin datos censurados
+
+### Modelo generativo
+
+-   Sea $C$ el color del pelaje del gato (1 si es negro y 2 en cualquier otro caso).
+
+-   $U$ las variables no observadas o no tomadas en cuenta para el modelo (si el gato llegó enfermo, sexo, temperamento, etc.).
+
+-   $A$ es 1 si el gato fue adoptado y 0 en cualquier otro caso.
+
+-   $D$ son los días que le toma a un gato ser adoptado o salir del refugio.
+
+Como para este primer modelo **NO** estamos tomando en cuenta los datos censurados, solo tomamos los datos de los gatos que son adoptados.
+
+
+```{r, echo=FALSE}
+grViz("
+digraph {
+  graph [ranksep = 0.2, rankdir = LR, bgcolor=ivory2]
+  node [shape=plaintext]
+  U [shape=circle]
+  C
+  D
+  A [fontcolor=red]
+  edge [minlen = 3]
+  U -> A
+  C -> A
+  A -> D
+}
+", width = 400)
+```
+```{r}
+g1 <- dagitty( "dag {     U -> A     C -> A     A -> D }")
+impliedConditionalIndependencies(g1, type = "all.pairs")
+```
+
+Es fácil observar que es una mala idea controlar por $A$, ya que estaríamos bloqueando justo el efecto que queremos modelar, esto es, si el color negro del gato afecta su tiempo para ser adoptado.
+
+Podemos modelar las adopciones sí observadas (no censuradas) como una probabilidad de que un evento ocurra, esto es:
+
+$$D_i\sim\exp(\lambda_i)$$ $$p(D_i|\lambda_i)=\lambda_i\exp(-\lambda_iD_i)$$
+
+La distribución exponencial es adecuada para eventos donde el tiempos entre ellos ocurren de manera continua y aleatoria, como las adopciones de gatos. Se define un parámetro $\lambda$, probabilidad constante de cada día de ser adoptados. Después de cierto periodo, n número de gatos habrán sido adoptados, y conforme pasa el tiempo menos gatos estarán en espera de ser adoptados (decaimiento exponencial). La distribución exponencial distribuye nuestra incertidumbre de manera uniforme sobre el tiempo.
+
+En nuestro caso, para las adopciones observadas $p(D_i|\lambda_i)$ representa la probabilidad de ser adoptado en "x" día.
+
+Antes de usar los datos reales, hacemos una prueba con datos simulados y nuestras suposiciones. La siguiente función simula una muestra de N gatos y regresa el tiempo para ser adoptados:
+
+```{r}
+# 
+sim_gatos_1 <- function(lambda_negro = 0.02, lambda_otro = 0.04, N = 1000, p=0.15) {
+  num_gatos_negros <- round(N*p)
+  num_otros_gatos <- N - num_gatos_negros
+  black_days <- round(rexp(num_gatos_negros, lambda_negro))
+  other_days <- round(rexp(num_otros_gatos, lambda_otro))
+  censored <- rep(0, N)
+  tibble( days_to_adoption = c(black_days, other_days),
+          color_id=c(rep(1,num_gatos_negros),rep(2,num_otros_gatos)),
+          censored
+        )
+}
+```
+
+Podemos hacer pruebas al modelo generativo en casos extremos:
+
+```{r}
+# set.seed(1234)
+sim_gatos_1(p=1.0, N=10) # puros gatos negros.
+```
+
+```{r}
+sim_gatos_1(p=0.0, N=10) # ningún gato negro.
+```
+
+Y también revisamos nuestro modelo generativo con el conocimiento de área, en este caso usamos la curva de supervivencia Kaplan-Meier:
+
+```{r}
+set.seed(123)
+data <- sim_gatos_1(N=100)
+
+# Datos ordenados por days_to_adoption, para cada grupo.
+data <- data %>%
+  arrange(color_id, days_to_adoption)
+
+# Convertir color_id a factor para los gráficos.
+data$color_id <- as.factor(data$color_id)
+
+calculate_km <- function(time, status) {
+  n <- length(time)
+  survival <- cumprod(1 - status / (n:1))
+  data.frame(time = time, survival = survival)
+}
+
+# Kaplan-Meier para cada grupo.
+km_data <- data %>%
+  group_by(color_id) %>%
+  arrange(days_to_adoption) %>%
+  mutate(event = 1 - censored) %>%
+  mutate(risk_set = rev(cumsum(rev(event)))) %>%
+  group_modify(~ calculate_km(.x$days_to_adoption, .x$event)) %>%
+  ungroup()
+
+
+km_plot_data <- km_data %>%
+  select(time, survival, color_id) %>%
+  distinct()
+
+# Gráfica de curva de supervivencia Kaplan-Meier.
+ggplot(km_plot_data, aes(x = time, y = survival, color = color_id)) +
+  geom_step() +
+  labs(title = "Curva de Supervivencia de Kaplan-Meier", x = "Tiempo",
+       y = "Probabilidad de Supervivencia") +
+  theme_minimal() + 
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+
+```
+
+El modelo de Kaplan-Meier se basa en la estimación de las probabilidades condicionales en cada punto temporal cuando tiene lugar un evento y en tomar el límite del producto de esas probabilidades para estimar la tasa de supervivencia en cada punto temporal.
+
+En esta gráfica podemos ver que, un poco antes de los 50 días, la población de gatos negros (1) aún en espera de ser adoptados es superior a los otros gatos (2).
+
+Finalmente, podemos simular de la *a priori* cuáles son las posibilidades que estamos considerando.
+
+```{r}
+sim_gatos_mod_1 <- function(N = 1000, p=0.15) {
+
+  alpha <- rnorm(2, 3, 1)
+  # print(alpha)
+  lambda_negro <- 1/exp(alpha[1])
+  lambda_otro <- 1/exp(alpha[2])
+  # print(lambda_negro)
+  num_gatos_negros <- round(N*p)
+  num_otros_gatos <- N - num_gatos_negros
+  negro_dias <- round(rexp(num_gatos_negros, lambda_negro))
+  otro_dias <- round(rexp(num_otros_gatos, lambda_otro))
+  censored <- rep(0, N)
+  tibble(days_to_adoption = c(negro_dias, otro_dias),
+          color_id=c(rep(1,num_gatos_negros),rep(2,num_otros_gatos)),
+            censored
+        )
+
+}
+```
+
+Hacemos replicaciones:
+
+```{r}
+set.seed(123)
+sims_tbl <- map_df(1:20, function(rep){
+  sim_gatos_mod_1(N=100) %>% mutate(rep = rep)
+ })
+```
+
+Nuestros supuestos actuales se ven así.
+
+```{r}
+sims_tbl %>%
+  arrange(rep, color_id, days_to_adoption) %>%
+  mutate(color_id = as.factor(color_id)) %>%
+  group_by(rep, color_id) %>%
+  arrange(days_to_adoption) %>%
+  mutate(event = 1 - censored) %>%
+  mutate(risk_set = rev(cumsum(rev(event)))) %>%
+  group_modify(~ calculate_km(.x$days_to_adoption, .x$event)) %>%
+  ungroup() %>%
+  select(time, survival, color_id, rep) %>%
+  distinct() %>%
+  ggplot(aes(x = time, y = survival, color = color_id)) +
+  geom_step() +
+  labs(title = "Curva de Supervivencia de Kaplan-Meier", x = "Tiempo",
+       y = "Probabilidad de Supervivencia") +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 200)) +
+  facet_wrap(~rep) + 
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+
+ 
+```
+
+Aunque hay algunas un poco extremas, la mayoría luce razonable.
+
+### Cantidad a estimar
+
+Queremos estimar el número de días $D$ que le toma a un gato esperar para ser adoptado, pero, como lo mencionamos arriba, tomaremos solo los gatos que **sí** fueron adoptados en la ventana de tiempo, esto es:
+
+```{r}
+AustinCats_model_1 <- AustinCats %>% filter(adoptado == 1)
+
+nrow(AustinCats_model_1)/nrow(AustinCats)*100
+```
+
+Trabajaremos con solo el 50% de las observaciones de la base original de *`AustinCats`*.
+
+### Proceso estadístico
+
+Como estamos controlando por $A_i=1$, nuestro objetivo es calcular o aproximar la cantidad:
+
+$$p(D_i | A_i = 1)$$
+
+$$D_i | A_i = 1 \sim \exp(\lambda_i)$$ con: $$\lambda_i = 1/\mu_i$$ $$log \mu_i = \alpha_{Color_i}$$ $$\alpha_{Color} \sim N(0,1)$$
+
+### Pruebas del proceso estadístico
+
+El modelo en stan se puede escribir como sigue:
+
+```{r}
+#days_to_event con event= adopcion
+model_string <- "
+data {
+  int<lower=0> N;  // Número total de obs.
+  int<lower=1,upper=2> color_id[N];  // Índice de color de pelaje para cada obs.
+  vector<lower=0>[N] days_to_event;  // Días hasta el evento (adopción)
+}
+
+parameters {
+  vector[2] alpha;  // Intercepto para cada categoría de color de pelaje
+}
+
+model {
+  vector[N] lambda;  // Tasa de adopción para cada observación
+  alpha ~ normal(0, 1);  // Prior para los interceptos: Normal(0,1)
+
+  for (i in 1:N) {
+    lambda[i] = exp(-alpha[color_id[i]]);  
+    // Tasa de adopción para cada observación, basada en el intercepto 
+    // correspondiente al color de pelaje
+  }
+
+  days_to_event ~ exponential(lambda);  
+  // Distribución exponencial para los días hasta el evento, con tasa lambda
+}
+"
+```
+
+```{r}
+stan_model <- stan_model(model_code = model_string, model_name = "modelo_gatos")
+```
+
+Utilizaremos una muestra simulada de 1000 gatos de nuestro proceso generador de datos para hacerle pruebas *a piori* a nuestro modelo.
+
+```{r}
+set.seed(123)
+gatos_prueba <- sim_gatos_1(lambda_negro = 0.02, lambda_otro = 0.04)
+```
+
+```{r}
+data_list = list(
+  N = nrow(gatos_prueba),
+  days_to_event = as.numeric(gatos_prueba$days_to_adoption),
+  color_id = gatos_prueba$color_id
+)
+```
+
+```{r}
+stan_fit <- sampling(stan_model, data = data_list, chains = 3,
+                     iter = 2000, warmup = 1000,
+                     thin = 2, control = list(adapt_delta = 0.95))
+```
+
+Finalmente podemos recuperar las lambdas:
+
+```{r}
+print(stan_fit)
+```
+
+```{r}
+exp(-3.89) # gatos negros 
+exp(-3.25) # otros gatos
+```
+
+### Analizar datos y resumir resultados
+
+Ahora que terminamos de revisar nuestros supuestos *a priori*, utilizaremos los datos observados de adopciones en nuestra base de datos filtrada.
+
+```{r}
+# Pasamos los datos observados a ser evaluados en nuestro modelo
+data_list = list(
+  N = nrow(AustinCats_model_1),
+  days_to_event = as.numeric(AustinCats_model_1$days_to_event),
+  color_id = AustinCats_model_1$id_pelaje
+)
+```
+
+```{r}
+# Definimos parámetros de la simulación de nuestro modelo
+stan_fit <- sampling(stan_model, data = data_list, chains = 3,
+                     iter = 2000, warmup = 1000, thin = 2,seed = 1234,
+                     control = list(adapt_delta = 0.95))
+```
+
+### Revisar cómputos y resultado del modelo
+
+```{r}
+# Resultados del modelo
+print(stan_fit)
+```
+
+```{r}
+alpha_samples <-  rstan::extract(stan_fit, pars = "alpha")$alpha
+```
+
+```{r}
+traceplot(stan_fit, pars = "alpha") +
+  theme(panel.background = element_rect(fill = "ivory2"),
+        plot.background = element_rect(fill = "ivory2"))
+```
+
+Las cadenas se mezclan correctamente y tenemos tamaños de muestra efectivos y Rhat buenos.
+
+Inferencia a partir de la distribución *a posteriori* de alpha, calculamos intervalos de credibilidad para evaluar la plausibilidad de los valores de los interceptos para cada categoría de color de pelaje, dada la evidencia de los datos.
+
+Los intervalos de credibilidad para cada elemento de alpha nos permitirán determinar si existe evidencia estadísticamente significativa de que el color del pelaje influye en el tiempo de adopción.
+
+Si los intervalos de credibilidad para las diferentes categorías de color no se superponen significativamente, esto sugeriría que hay una diferencia en los tiempos de adopción entre los gatos de diferentes colores.
+
+```{r,echo=FALSE}
+# Graficamos distribuciones posteriores de alpha
+library(posterior)
+library(ggplot2)
+```
+
+```{r}
+alpha_df <- as.data.frame(alpha_samples)
+colnames(alpha_df) <- paste0("alpha[", 1:ncol(alpha_df), "]")
+
+alpha_long <- tidyr::gather(alpha_df, key = "parameter", value = "value")
+
+ggplot(alpha_long, aes(x = value, fill = parameter)) +
+  geom_density(alpha = 0.6) +
+  xlab("Alpha") +
+  ylab("Densidad") +
+  ggtitle("Distribuciones Posteriores de Alfa") + 
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+```
+
+Intervalos de credibilidad:
+
+El intervalo de credibilidad del 95% para alpha\[1\] (gatos negros) es \[3.73, 3.83\].
+
+El intervalo de credibilidad del 95% para alpha\[2\] (otros colores) es \[3.61, 3.65\].
+
+Estos intervalos no se superponen, lo que sugiere que hay una diferencia significativa en los tiempos de adopción entre los gatos negros y los gatos de otros colores.
+
+Medias posteriores:
+
+La media posterior de alpha\[1\] (gatos negros) es 3.78.
+
+La media posterior de alpha\[2\] (otros colores) es 3.63.
+
+Observaciones
+
+Es crucial reconocer que este modelo ignora los datos censurados (gatos no adoptados), que, como mencionamos anteriormente, podrían introducir sesgo en las estimaciones. Los gatos no adoptados podrían tener características distintas a los adoptados.
+
+Por lo tanto, aunque el Modelo 2 ofrece información valiosa, sus resultados deben interpretarse con precaución y complementarse con los del Modelo 1, que incorpora los datos censurados para un análisis más completo.
+
+```{r}
+lambda_black <- exp(-3.78)  # Tasa de adopción para gatos negros
+lambda_other <- exp(-3.63)  # Tasa de adopción para gatos de otros colores
+
+calc_cdf_ccdf <- function(lambda, t) {
+  cdf <- 1 - exp(-lambda * t)
+  ccdf <- exp(-lambda * t)
+  return(data.frame(t = t, cdf = cdf, ccdf = ccdf))
+}
+
+t <- seq(0, 100, length.out = 1000)  # Rango de tiempo (0 a 100 días)
+cdf_ccdf_black <- calc_cdf_ccdf(lambda_black, t)
+cdf_ccdf_other <- calc_cdf_ccdf(lambda_other, t)
+
+
+library(ggplot2)
+
+# Gráfico CDF
+cdf_plot <- ggplot() +
+  geom_line(data = cdf_ccdf_black, aes(x = t, y = cdf, color = "Black"), size = 1) +
+  geom_line(data = cdf_ccdf_other, aes(x = t, y = cdf, color = "Other"), size = 1) +
+  labs(x = "Tiempo (días)", y = "Probabilidad Acumulada",
+       title = "CDF de Tiempo de adopción") +
+  scale_color_manual(name = "Color Pelaje",
+                     values = c("Black" = "black", "Other" = "blue")) +
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+
+# Mostrar los gráficos
+print(cdf_plot)
+
+```
+
+La curva CDF muestra la probabilidad acumulada de que un gato sea adoptado antes o en un tiempo determinado. 
+
+
+
+```{r}
+# Simula parámetros de la posterior
+posterior_samples <- rstan::extract(stan_fit)$alpha
+
+# Función para simular datos basada en parámetros
+simulate_data <- function(alpha, n) {
+  lambda <- exp(-alpha)
+  rexp(n, rate = lambda)
+}
+
+# Simula nuevas observaciones de los mismos tamaños que tus datos observados
+simulated_data <- sapply(posterior_samples, simulate_data, n = length(AustinCats_model_1$days_to_event))
+
+# Convierte a formato largo para gráficos
+simulated_data_long <- as.data.frame(t(simulated_data))
+colnames(simulated_data_long) <- seq_len(ncol(simulated_data_long))
+simulated_data_long <- pivot_longer(simulated_data_long, cols = everything(), names_to = "simulation", values_to = "days_to_event_sim")
+
+# Añade los datos observados para comparación
+simulated_data_long$observed <- rep(AustinCats_model_1$days_to_event, times = ncol(simulated_data))
+
+# Gráfico de comparación
+ggplot(simulated_data_long) +
+  geom_density(aes(x = days_to_event_sim, fill = "Simulado"), alpha = 0.5) +
+  geom_density(aes(x = observed, fill = "Observado"), alpha = 0.5) +
+  labs(x = "days_to_event", y = "Densidad") +
+  guides(fill = guide_legend(title = "Type"))
+```
+
+```{r}
+
+# Filtrando para días hasta 100 para una mejor visualización
+filtered_data <- simulated_data_long %>%
+  filter(days_to_event_sim <= 100, observed <= 100)
+
+# Gráfico de densidades comparando simulado y observado hasta 100 días
+ggplot(filtered_data) +
+  geom_density(aes(x = days_to_event_sim, fill = "Simulado"), alpha = 0.5) +
+  geom_density(aes(x = observed, fill = "Observado"), alpha = 0.5) +
+  labs(x = "days_to_event (100 días)", y = "Densidad") +
+  guides(fill = guide_legend(title = "Type")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"), 
+        plot.background = element_rect(fill = "white"),
+        legend.position = "right")
+
+```
+
+```{r}
+# Convertir alpha_samples en un data frame
+alpha_samples_df <- as.data.frame(alpha_samples)
+
+# Renombrar las columnas del data frame
+colnames(alpha_samples_df) <- paste0("alpha", 1:ncol(alpha_samples_df))
+
+# Función para simular datos de la predictiva posterior
+sim_pred_post <- function(rep, sims_tbl, days_to_event) {
+  sims_tbl |> 
+    slice_sample(n = nrow(AustinCats_model_1)) |> 
+    mutate(rep = as.character(rep),  # Convertir rep a carácter
+           days_to_event_sim = rexp(n(), rate = 1/exp(sims_tbl$alpha1))) |> 
+    select(rep, days_to_event_sim)
+}
+
+# Generar simulaciones de la predictiva posterior
+set.seed(123)
+sims_check_post <- map_dfr(1:12, ~ sim_pred_post(.x, sims_tbl = alpha_samples_df, 
+                                                 days_to_event = AustinCats_model_1$days_to_event))
+
+# Preparar datos para graficar
+plot_data <- sims_check_post |>
+  mutate(type = "Simulado") |>
+  bind_rows(AustinCats_model_1 |> 
+              mutate(rep = "Observado", days_to_event_sim = days_to_event, type = "Observado")) |>
+  filter(days_to_event_sim < 200)  # Ajusta el límite superior según tus datos
+
+# Gráficas múltiples
+ggplot(plot_data, aes(x = days_to_event_sim, color = type)) +
+  geom_density(alpha = 0.5) +
+  xlim(0, 200) +  # Ajusta el límite superior según tus datos
+  facet_wrap(~ rep, ncol = 4) +  # Ajusta ncol según el número de gráficas por fila
+  labs(x = "days_to_event", y = "Densidad", color = "Type") +
+  scale_color_manual(values = c("Simulado" = "skyblue", "Observado" = "orange")) +
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  ggtitle("Comparación de los datos simulados con los observados")
+```
+
+
+
+
+## Modelo con datos censurados
+
+### Modelo generativo
+
+Para este caso tenemos el mismo modelo, solo que esta vez no vamos a controlar por la variable $A$.
+
+```{r, echo=FALSE}
+grViz("
+digraph {
+  graph [ranksep = 0.2, rankdir = LR, bgcolor=ivory2]
+  node [shape=plaintext]
+  U [shape=circle]
+  C
+  D
+  A
+  edge [minlen = 3]
+  U -> A
+  C -> A
+  A -> D
+}
+", width = 400)
+```
+
+```{r}
+g1 <- dagitty( "dag {     U -> A     C -> A     A -> D }")
+impliedConditionalIndependencies(g1, type = "all.pairs")
+```
+
+Para las adopciones sí observadas (no censuradas) usamos el mismo modelo:
+
+$$D_i\sim\exp(\lambda_i)$$ $$p(D_i|\lambda_i)=\lambda_i\exp(-\lambda_iD_i)$$Y para los datos censurados usamos la distribución de probabilidad acumulada complementaria (CCDF): probabilidad de que el evento NO haya ocurrido antes o en el tiempo $x$.
+
+Al igual que lo hicimos en el caso sin censura, antes de usar los datos reales, hacemos una prueba con datos simulados y nuestras suposiciones. La siguiente función simula una muestra de N gatos y regresa el tiempo para ser adoptados:
+
+```{r}
+sim_gatos_2 <- function(lambda_negro = 0.01, lambda_otro = 0.02, N = 1000, p = 0.15, p_transfer = 0.1) {
+  num_gatos_negros <- round(N * p)
+  num_otros_gatos <- N - num_gatos_negros
+  
+  # Simular el tiempo de adopción
+  black_days <- round(rexp(num_gatos_negros, lambda_negro))
+  other_days <- round(rexp(num_otros_gatos, lambda_otro))
+  
+  # Simular los tiempos de transferencia
+  transfer_days_black <- round(rexp(num_gatos_negros, lambda_negro))
+  transfer_days_other <- round(rexp(num_otros_gatos, lambda_otro))
+  
+  # Combinar los tiempos de adopción y transferencia
+  transfer_days <- c(transfer_days_black, transfer_days_other)
+  days_to_event <- c(black_days, other_days)
+  
+ 
+  is_transferred <- runif(N) < p_transfer
+  
+  # Determinar si cada gato es transferido
+  final_days_to_event <- ifelse(is_transferred, pmin(days_to_event, transfer_days), days_to_event)
+  
+  # Simular el estado de censura: 0 = censurado (censurado a la derecha o transferido), 1 = adoptado
+  adoptado <- ifelse(final_days_to_event >= 200 | is_transferred, 0, 1)
+  
+  # Crear tibble
+  tibble(
+    days_to_adoption = final_days_to_event,
+    color_id = c(rep(1, num_gatos_negros), rep(2, num_otros_gatos)),
+    adoptado
+  )
+}
+
+```
+
+Podemos hacer pruebas al modelo generativo en casos extremos:
+
+```{r}
+# set.seed(1234)
+sim_gatos_2(p=1.0, N=10) # puros gatos negros.
+```
+
+```{r}
+sim_gatos_2(p=0.0, N=10) # ningún gato negro.
+```
+
+```{r}
+set.seed(123)
+data <- sim_gatos_2(N=1000)
+
+data <- data %>%
+  arrange(color_id, days_to_adoption)
+# Convertir color_id a factor para los gráficos.
+data$color_id <- as.factor(data$color_id)
+
+calculate_km <- function(time, status) {
+  n <- length(time)
+  survival <- cumprod(1 - status / (n:1))
+  data.frame(time = time, survival = survival)
+}
+
+# Kaplan-Meier para cada grupo.
+km_data <- data %>%
+  group_by(color_id) %>%
+  arrange(days_to_adoption) %>%
+  mutate(event = 1 - adoptado) %>%
+  mutate(risk_set = rev(cumsum(rev(event)))) %>%
+  group_modify(~ calculate_km(.x$days_to_adoption, .x$event)) %>%
+  ungroup()
+
+
+km_plot_data <- km_data %>%
+  select(time, survival, color_id) %>%
+  distinct()
+
+# Gráfica de curva de supervivencia Kaplan-Meier.
+ggplot(km_plot_data, aes(x = time, y = survival, color = color_id)) +
+  geom_step() +
+  labs(title = "Curva de Supervivencia de Kaplan-Meier", x = "Tiempo", y = "Probabilidad de Supervivencia") +
+  theme_minimal() + 
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+```
+
+En esta gráfica podemos ver que, un poco antes de los 100 días, la población de gatos negros (1) aún en espera de ser adoptados es superior a los otros gatos (2).
+
+```{r}
+sim_gatos_mod2 <- function(N = 1000, p = 0.15, p_transfer = 0.1) {
+  alpha <- rnorm(2, 4, 0.5)
+  lambda_negro <- 1 / exp(alpha[1])
+  lambda_otro <- 1 / exp(alpha[2])
+  num_gatos_negros <- round(N * p)
+  num_otros_gatos <- N - num_gatos_negros
+  
+  # Simular el tiempo de adopción
+  black_days <- round(rexp(num_gatos_negros, lambda_negro))
+  other_days <- round(rexp(num_otros_gatos, lambda_otro))
+  
+  # Simular los tiempos de transferencia
+  transfer_days_black <- round(rexp(num_gatos_negros, lambda_negro))
+  transfer_days_other <- round(rexp(num_otros_gatos, lambda_otro))
+  
+  # Combinar los tiempos de adopción y transferencia
+  transfer_days <- c(transfer_days_black, transfer_days_other)
+  days_to_event <- c(black_days, other_days)
+  
+  
+  is_transferred <- runif(N) < p_transfer
+  
+  # Determinar si cada gato es transferido
+  final_days_to_event <- ifelse(is_transferred, pmin(days_to_event, transfer_days), days_to_event)
+  
+  # Simular el estado de censura: 0 = censurado (censurado a la derecha o transferido), 1 = adoptado
+  adoptado <- ifelse(final_days_to_event >= 100 | is_transferred, 0, 1)
+  
+  # Crear tibble
+  tibble(
+    days_to_adoption = final_days_to_event,
+    color_id = c(rep(1, num_gatos_negros), rep(2, num_otros_gatos)),
+    adoptado
+  )
+}
+```
+
+Hacemos replicaciones:
+
+```{r}
+set.seed(123)
+sims_tbl <- map_df(1:20, function(rep){
+  sim_gatos_mod2(N=1000) %>% mutate(rep = rep)
+ })
+```
+
+Nuestros supuestos actuales se ven así.
+
+```{r}
+sims_tbl %>%
+  arrange(rep, color_id, days_to_adoption) %>%
+  mutate(color_id = as.factor(color_id)) %>%
+  group_by(rep, color_id) %>%
+  arrange(days_to_adoption) %>%
+  mutate(event = 1 - adoptado) %>%
+  mutate(risk_set = rev(cumsum(rev(event)))) %>%
+  group_modify(~ calculate_km(.x$days_to_adoption, .x$event)) %>%
+  ungroup() %>%
+  select(time, survival, color_id, rep) %>%
+  distinct() %>%
+  ggplot(aes(x = time, y = survival, color = color_id)) +
+  geom_step() +
+  labs(title = "Curva de Supervivencia de Kaplan-Meier", x = "Tiempo",
+       y = "Probabilidad de Supervivencia") +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 200)) +
+  facet_wrap(~rep) + 
+  theme(panel.background = element_rect(fill = "ivory2"), 
+        plot.background = element_rect(fill = "ivory2"))
+```
+Aunque hay algunas un poco extremas, la mayoría luce razonable.
+
+### Cantidad a estimar
+
+Nuestro objetivo sigue siendo estimar el número de días $D$ que le toma a un gato esperar para ser adoptado, esta vez utilizaremos tanto los datos censurados como no censurados.
+
+### Proceso estadístico
+
+$$f(y)=\lambda e^{\lambda y}$$
+
+$$E[y]=\frac{1}{\lambda}$$
+
+$$D_i | A_i = 1 \sim \exp(\lambda_i)$$ $$D_i | A_i = 0 \sim \exp CCDF(\lambda_i)$$
+
+$$\lambda_i = 1/\mu_i$$
+
+$$log \mu_i = \alpha_{Color_i}$$ $$\alpha_{Color} \sim N(0,1)$$
+
+-   $D_i | A_i = 1$ - adopciones observadas
+
+-   $D_i | A_i = 1$ - adopciones aun no observadas
+
+-   $\alpha_{\text{cat color}[i]}$ - $log\mu$ tiempo de adopción para cada color
+
+-   $\log \mu_i$ - función liga para garantizar $\alpha$ positivos
+
+-   $\lambda_i = \frac{1}{\mu_i}$ tiempo promedio adopción
+
+La CCDF (Complementary Cumulative Distribution Function) muestra la probabilidad acumulada complementaria, es decir, la probabilidad de que un gato no sea adoptado antes o en un tiempo determinado.
+### Pruebas del proceso estadístico
+
+El modelo en stan se puede escribir como sigue:
+
+```{r}
+modelo <- cmdstan_model("modelo2.stan")
+print(modelo)
+```
+
+Nuevamente, utilizaremos una muestra simulada de 1000 gatos de nuestro proceso generador de datos para hacerle pruebas *a piori* a nuestro modelo.
+
+```{r}
+set.seed(1234)
+d <- sim_gatos_2()
+d
+```
+
+```{r}
+data_list_2 = list(
+  N = nrow(d),
+  adopted = d$adoptado,
+  days_to_event = as.numeric(d$days_to_adoption),
+  color_id = d$color_id
+)
+```
+
+
+```{r}
+fit_mod2 <- modelo$sample(
+  data = data_list_2,
+  init = 0.1,
+  step_size = 0.01,
+  seed = 1234,
+  chains = 3,
+  iter_sampling = 2000, 
+  iter_warmup = 1000,
+  refresh = 200
+  # show_messages = FALSE,
+  # show_exceptions = FALSE
+  )
+```
+
+Revisamos los coeficientes.
+
+```{r}
+fit_mod2$summary(c("alpha"))
+```
+
+```{r}
+1/exp(4.832)
+1/exp(3.947)
+```
+
+Que son muy cercamos a los valores iniciales para este caso: 0.01 y 0.02
+
+### Analizar datos y resumir resultados
+
+Ahora que terminamos de revisar nuestros supuestos *a priori*, utilizaremos los datos observados de adopciones en nuestra base de datos completa.
+
+```{r}
+# Pasamos los datos observados a ser evaluados en nuestro modelo
+data_list_2b = list(
+  N = nrow(AustinCats),
+  adopted = AustinCats$adoptado,
+  days_to_event = as.numeric(AustinCats$days_to_event),
+  color_id = AustinCats$id_pelaje
+)
+```
+
+```{r}
+fit_mod2 <- modelo$sample(
+  data = data_list_2b,
+  init = 0.1,
+  step_size = 0.005,
+  seed = 1234,
+  chains = 3,
+  iter_sampling = 2000, 
+  iter_warmup = 1000,
+  refresh = 200
+  # show_messages = FALSE,
+  # show_exceptions = FALSE
+  )
+```
+
+```{r}
+# Paso 1: Extraer muestras y calcular intervalos de credibilidad
+posterior_1 <- fit_mod2$draws("alpha",format = "df")  %>% 
+  as_tibble() %>% 
+  pivot_longer(cols = starts_with("alpha"), names_to = "variable") %>% 
+  select(variable, value) %>% 
+  mutate(value=exp(value)) %>% 
+  group_by(variable) %>% 
+  summarise(media = mean(value),
+            q5 = quantile(value,0.05),
+            q95 = quantile(value,0.95)) %>% 
+  separate(variable, sep = "[\\[\\]]", into=c("variable", "alpha"), extra="drop", convert = TRUE) 
+
+# posterior_1
+
+ggplot(posterior_1, aes(x = variable, y = media, color = factor(alpha))) +  # Added color aesthetic with factor(alpha)
+  geom_point() +
+  geom_errorbar(aes(ymin = q5, ymax = q95), width = 0.2) +
+  coord_flip() +  # Rotate the plot to make it horizontal
+  labs(x = "", y = "dias para la adopcion") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 10)
+  ) +
+  scale_color_manual(values = c("black", "brown"), labels = c("Negro 1", "Otro 2"))  # Manual color scale
+```
+
+```{r}
+posterior_2 <-  
+fit_mod2$draws("alpha", format = "df") %>%
+  as_tibble() %>%
+  pivot_longer(cols = starts_with("alpha"), names_to = "variable") %>%
+  select(variable, value) %>% 
+  mutate(value = exp(value),
+         variable = case_when(
+           variable == "alpha[1]" ~ "Black",
+           TRUE ~ "Other"
+         ))
+# Crear el gráfico
+ggplot(posterior_2, aes(x = value, fill = variable, color = variable)) +
+  geom_density(alpha = 0.5) +
+  scale_color_manual(values = c("Black" = "black", "Other" = "brown")) +
+  scale_fill_manual(values = c("Black" = "black", "Other" = "brown")) +
+  labs(x = "waiting time", y = "density") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+```{r}
+posterior_3 <-  
+fit_mod2$draws("alpha", format = "df") %>%
+  as_tibble() %>%
+  select('alpha[1]', 'alpha[2]') %>% 
+  rename(Black = 'alpha[1]', Other = 'alpha[2]') %>% 
+  mutate(Black = exp(Black),
+         Other = exp(Other))
+
+# Generar una secuencia de días
+days_until_adoption_ <- seq(1, 100, by = 1)
+n_posterior_samples <- 25
+
+# Seleccionar muestras posteriores para las categorías de colores
+black_samples <- posterior_3$Black[1:n_posterior_samples]
+other_samples <- posterior_3$Other[1:n_posterior_samples]
+
+# Crear un data frame para ggplot2
+plot_data <- data.frame()
+
+# Agregar muestras de 'Black'
+for (alpha in black_samples) {
+  plot_data <- rbind(plot_data, data.frame(
+    days = days_until_adoption_,
+    fraction = exp(-days_until_adoption_ / alpha),
+    cat_color = "Black",
+    alpha_value = alpha
+  ))
+}
+
+# Agregar muestras de 'Other'
+for (alpha in other_samples) {
+  plot_data <- rbind(plot_data, data.frame(
+    days = days_until_adoption_,
+    fraction = exp(-days_until_adoption_ / alpha),
+    cat_color = "Other",
+    alpha_value = alpha
+  ))
+}
+
+# Convertir cat_color a factor para ggplot2
+plot_data$cat_color <- factor(plot_data$cat_color, levels = c("Black", "Other"))
+
+# Crear el gráfico
+library(ggplot2)
+
+ggplot(plot_data, aes(x = days, y = fraction, group = alpha_value, color = cat_color)) +
+  geom_line(alpha = 0.25) +
+  scale_color_manual(values = c("Black" = "black", "Other" = "brown")) +
+  labs(x = "days until adoption", y = "fraction") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+
+```
+
+
+### Revisar cómputos y resultado del modelo
+
+Las cadenas, `rhat` y parámetros `ess`, lucen adecuados:
+
+```{r}
+fit_mod2$summary(c("alpha"))
+```
+
+```{r warning=FALSE}
+mcmc_trace(fit_mod2$draws(c("alpha")), palette = "viridis")
+```
+
+```{r,echo=FALSE}
+# pred_samples <- fit_mod2$draws("pred",format = "df") %>%
+#   as_tibble()
+# pred_samples <- pred_samples %>% 
+#   select(1:22356)
+
+```
+
+
+
+```{r, echo=FALSE}
+# library(survival)
+# library(ggplot2)
+# library(dplyr)
+# 
+# # Assuming AustinCats is your dataset
+# 
+# # Extract the first row as a sample
+# sample_data <- as.numeric(pred_samples[1, ])
+# 
+# # Extract id_pelaje column
+# id_pelaje <- AustinCats$id_pelaje
+# 
+# # Combine sample_data with id_pelaje column
+# sample_data_with_id <- data.frame(time = sample_data, id_pelaje)
+# 
+# # Fit Kaplan-Meier models for id_pelaje = 1 and id_pelaje = 2
+# km_fit_1 <- survfit(Surv(time, event) ~ 1, data = filter(sample_data_with_id, id_pelaje == 1))
+# km_fit_2 <- survfit(Surv(time, event) ~ 1, data = filter(sample_data_with_id, id_pelaje == 2))
+# 
+# # Plot Kaplan-Meier curves
+# g <- ggplot() +
+#   geom_step(data = data.frame(km_fit_1$time, km_fit_1$surv), aes(x = time, y = surv), color = "blue") +
+#   geom_step(data = data.frame(km_fit_2$time, km_fit_2$surv), aes(x = time, y = surv), color = "red") +
+#   labs(title = "Kaplan-Meier Curves by id_pelaje", x = "Days until adoption", y = "Survival Probability") +
+#   scale_color_manual(values = c("blue", "red"), labels = c("id_pelaje = 1", "id_pelaje = 2"))
+# 
+# # Print the plot
+# print(g)
+
+```
+
+## Modelo con datos censurados y más variables
+
+### Modelo generativo
+
+Finalmente, vamos a agregar la variable de raza a nuestro modelo:
+
+```{r,echo=FALSE}
+grViz("
+digraph {
+  graph [ranksep = 0.2, rankdir = LR,bgcolor=ivory2]
+  node [shape=plaintext]
+  U [shape=circle]
+  C
+  D
+  A
+  edge [minlen = 3]
+  U -> A
+  R -> A
+  C -> A
+  A -> D
+}
+", width = 400)
+```
+
+```{r}
+g1 <- dagitty( "dag {     U -> A     C -> A     A -> D  R->A }")
+impliedConditionalIndependencies(g1, type = "all.pairs")
+```
+
+### Cantidad a estimar
+
+Estimar el número de días $D$ que le toma a un gato esperar para ser adoptado, esta vez utilizaremos tanto los datos censurados como no censurados. Tomando en cuenta nuestras nuevas variables binarias para color y raza.
+
+### Proceso estadístico
+
+Usamos el mismo proceso de modelo censurado
+
+
+$$f(y)=\lambda e^{\lambda y}$$
+
+$$E[y]=\frac{1}{\lambda}$$
+
+$$D_i | A_i = 1 \sim \exp(\lambda_i)$$ $$D_i | A_i = 0 \sim \exp CCDF(\lambda_i)$$
+
+$$\lambda_i = 1/\mu_i$$
+
+$$log \mu_i = \alpha_{Color_i}+\beta_{raza}$$ $$\alpha_{Color} \sim N(0,1)$$ $$\beta_{raza} \sim N(0,1)$$
+
+-   $D_i | A_i = 1$ - adopciones observadas
+
+-   $D_i | A_i = 1$ - adopciones aun no observadas
+
+-   $\alpha_{\text{cat color}[i]}$ - $log\mu$ tiempo de adopción para cada color
+
+-   $\log \mu_i$ - función liga para garantizar $\alpha$ positivos
+
+-   $\lambda_i = \frac{1}{\mu_i}$ tiempo promedio adopción
+
+### Analizar los datos y resumir resultados
+
+Vemos que el porcentaje de gatos negros se distribuye similar entre la raza "Domestic Shorthair Mix" y "Other", a como se distribuyen en general.
+
+```{r}
+resultados <- AustinCats %>%
+  count(raza, pelaje) %>%
+  group_by(raza) %>%
+  mutate(porcentaje = round(n / sum(n) * 100, 2))
+resultados
+```
+
+```{r}
+# Cargar los paquetes necesarios
+library(dplyr)
+library(rstan)
+library(tidyr)
+library(ggplot2)
+library(coda)
+library(bayesplot)
+
+CATS<-AustinCats
+# Factorizar las columnas categóricas
+CAT_COLOR_ID <- as.integer(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
+CAT_COLOR <- levels(as.factor(ifelse(CATS$color != "Black", "Other", CATS$color)))
+
+ADOPTED_ID <- as.integer(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
+ADOPTED <- levels(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
+
+# Factorizar la nueva columna 'raza'
+CATS$raza <- ifelse(CATS$raza == "domestico", "domestico", "otro")
+CAT_RAZA_ID <- as.integer(as.factor(CATS$raza))
+CAT_RAZA <- levels(as.factor(CATS$raza))
+
+DAYS_TO_ADOPTION <- as.numeric(CATS$days_to_event)
+LAMBDA <- 50
+LAMBDA2 <- 50
+
+# Preparar el modelo en rstan
+stan_code <- "
+data {
+  int<lower=1> N;               // number of data points
+  int<lower=1> K;               // number of color categories
+  int<lower=1> M;               // number of raza categories
+  real<lower=0> days_to_adoption[N]; // time to event
+  int<lower=1, upper=K> cat_color_id[N]; // categorical color id
+  int<lower=1, upper=M> cat_raza_id[N]; // categorical raza id
+  real<lower=0> lambda;         // rate parameter
+  real<lower=0> lambda2;         // rate parameter
+  real<lower=0> right_censoring[N];  // right censoring times
+}
+
+parameters {
+  vector<lower=0>[K] alpha;     // scale parameters for colors
+  vector<lower=0>[M] beta;      // scale parameters for raza
+}
+
+model {
+  real gamma = 1 / lambda;
+  real gamma2 = 1 / lambda2;
+  alpha ~ exponential(gamma);   // prior for alpha
+  beta ~ exponential(gamma2);    // prior for beta
+  for (n in 1:N) {
+    if (days_to_adoption[n] == right_censoring[n]) {
+      target += exponential_lccdf(right_censoring[n] | 1 / (alpha[cat_color_id[n]] * beta[cat_raza_id[n]]));
+    } else {
+      days_to_adoption[n] ~ exponential(1 / (alpha[cat_color_id[n]] * beta[cat_raza_id[n]]));
+    }
+  }
+}
+"
+
+# Datos para el modelo
+right_censoring <- ifelse(ADOPTED_ID == 1, max(DAYS_TO_ADOPTION), DAYS_TO_ADOPTION)
+
+data_list <- list(
+  N = length(DAYS_TO_ADOPTION),
+  K = length(CAT_COLOR),
+  M = length(CAT_RAZA),
+  days_to_adoption = DAYS_TO_ADOPTION,
+  cat_color_id = CAT_COLOR_ID,
+  cat_raza_id = CAT_RAZA_ID,
+  lambda = LAMBDA,
+  lambda2 = LAMBDA2,
+  right_censoring = right_censoring
+)
+
+# Compilar y ajustar el modelo
+fit <- stan(model_code = stan_code, data = data_list, iter = 2000, chains = 4)
+```
+
+```{r}
+print(fit)
+```
+
+### Revisar cómputos y resultado del modelo
+
+```{r}
+# Extraer las muestras de 'alpha' y 'beta'
+posterior_samples_alpha <- rstan::extract(fit, pars = "alpha")$alpha
+posterior_samples_beta <- rstan::extract(fit, pars = "beta")$beta
+
+# Convertir las muestras a data frames para facilitar la manipulación
+posterior_df_alpha <- as.data.frame(posterior_samples_alpha)
+posterior_df_beta <- as.data.frame(posterior_samples_beta)
+
+# Añadir nombres de columnas para las categorías de color y raza
+colnames(posterior_df_alpha) <- c("Black", "Other")
+colnames(posterior_df_beta) <- c("domestico", "otro")
+
+# Seleccionar muestras posteriores para las categorías de colores y raza
+n_posterior_samples <- 1
+black_samples <- posterior_df_alpha$Black[1:n_posterior_samples]
+other_samples <- posterior_df_alpha$Other[1:n_posterior_samples]
+domestico_samples <- posterior_df_beta$domestico[1:n_posterior_samples]
+otro_samples <- posterior_df_beta$otro[1:n_posterior_samples]
+
+# Generar una secuencia de días
+days_until_adoption_ <- seq(1, 100, by = 1)
+
+# Crear un data frame para ggplot2
+plot_data <- data.frame()
+
+# Agregar muestras de combinaciones de 'Black' y 'domestico'/'otro'
+for (alpha in black_samples) {
+  for (beta in domestico_samples) {
+    plot_data <- rbind(plot_data, data.frame(
+      days = days_until_adoption_,
+      fraction = exp(-days_until_adoption_ / (alpha * beta)),
+      cat_color = "Black",
+      cat_raza = "domestico",
+      alpha_value = alpha,
+      beta_value = beta
+    ))
+  }
+  for (beta in otro_samples) {
+    plot_data <- rbind(plot_data, data.frame(
+      days = days_until_adoption_,
+      fraction = exp(-days_until_adoption_ / (alpha * beta)),
+      cat_color = "Black",
+      cat_raza = "otro",
+      alpha_value = alpha,
+      beta_value = beta
+    ))
+  }
+}
+
+# Agregar muestras de combinaciones de 'Other' y 'domestico'/'otro'
+for (alpha in other_samples) {
+  for (beta in domestico_samples) {
+    plot_data <- rbind(plot_data, data.frame(
+      days = days_until_adoption_,
+      fraction = exp(-days_until_adoption_ / (alpha * beta)),
+      cat_color = "Other",
+      cat_raza = "domestico",
+      alpha_value = alpha,
+      beta_value = beta
+    ))
+  }
+  for (beta in otro_samples) {
+    plot_data <- rbind(plot_data, data.frame(
+      days = days_until_adoption_,
+      fraction = exp(-days_until_adoption_ / (alpha * beta)),
+      cat_color = "Other",
+      cat_raza = "otro",
+      alpha_value = alpha,
+      beta_value = beta
+    ))
+  }
+}
+
+# Convertir cat_color y cat_raza a factores para ggplot2
+plot_data$cat_color <- factor(plot_data$cat_color, levels = c("Black", "Other"))
+plot_data$cat_raza <- factor(plot_data$cat_raza, levels = c("domestico", "otro"))
+
+```
+
+```{r}
+ggplot(plot_data, aes(x = days, y = fraction, group = interaction(alpha_value, beta_value), color = cat_color)) +
+  geom_line(alpha = 0.25) +
+  facet_wrap(~ cat_raza) +
+  scale_color_manual(values = c("Black" = "black", "Other" = "blue")) +
+  labs(x = "days until adoption", y = "fraction") +
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+Vemos que los tiempos de adopción para color siguen siendo desfavorables para los gatos de color negro; sin embargo, si nos fijamos en la variable de raza los tiempos de adopción son muy similares, ligeramente más largos para la raza "Domestic Shorthair Mix", para verificar esto, correremos únicamente para la clasificación binaria "Domestic Shorthair Mix" y "Other" el modelo de datos censurados.
+
+
+```{r, echo=FALSE}
+#tomando sólo raza
+library(dplyr)
+library(purrr)
+CATS <- AustinCats
+CAT_RAZA_ID <- as.integer(as.factor(ifelse(CATS$breed != "Domestic Shorthair Mix", "Other", CATS$breed)))
+CAT_RAZA <- levels(as.factor(ifelse(CATS$breed != "Domestic Shorthair Mix", "Other", CATS$breed)))
+
+ADOPTED_ID <- as.integer(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
+ADOPTED <- levels(as.factor(ifelse(CATS$out_event != "Adoption", "Other", "Adopted")))
+
+DAYS_TO_ADOPTION <- as.numeric(CATS$days_to_event)
+LAMBDA <- 50
+```
+
+```{r,echo=FALSE,message=FALSE}
+stan_code <- "
+data {
+  int<lower=1> N;               // number of data points
+  int<lower=1> K;               // number of categories
+  real<lower=0> days_to_adoption[N]; // time to event
+  int<lower=1, upper=K> cat_raza_id[N]; // categorical raza id
+  real<lower=0> lambda;         // rate parameter
+  real<lower=0> right_censoring[N];  // right censoring times
+}
+
+parameters {
+  vector<lower=0>[K] alpha;     // scale parameters
+}
+
+model {
+  real gamma = 1 / lambda;
+  alpha ~ exponential(gamma);   // prior for alpha
+  for (n in 1:N) {
+    if (days_to_adoption[n] == right_censoring[n]) {
+      target += exponential_lccdf(right_censoring[n] | 1 / alpha[cat_raza_id[n]]);
+    } else {
+      days_to_adoption[n] ~ exponential(1 / alpha[cat_raza_id[n]]);
+    }
+  }
+}
+"
+
+# Datos para el modelo
+right_censoring <- ifelse(ADOPTED_ID == 1, max(DAYS_TO_ADOPTION), DAYS_TO_ADOPTION)
+
+data_list <- list(
+  N = length(DAYS_TO_ADOPTION),
+  K = length(CAT_RAZA),
+  days_to_adoption = DAYS_TO_ADOPTION,
+  cat_raza_id = CAT_RAZA_ID,
+  lambda = LAMBDA,
+  right_censoring = right_censoring
+)
+
+# Compilar y ajustar el modelo
+fit <- stan(model_code = stan_code, data = data_list, iter = 2000, chains = 4)
+```
+
+```{r,echo=FALSE}
+print(fit)
+```
+
+```{r,echo=FALSE}
+# Paso 1: Extraer muestras y calcular intervalos de credibilidad
+
+# Supongamos que ya tienes el objeto fit después de ajustar el modelo
+posterior_samples <- rstan::extract(fit, pars = "alpha")$alpha
+
+# Convertir las muestras a un data frame para facilitar la manipulación
+posterior_df <- as.data.frame(posterior_samples)
+
+# Calcular los intervalos de credibilidad (High Density Intervals, HDIs)
+library(coda)
+
+hdi <- apply(posterior_df, 2, function(x) {
+  HPDinterval(as.mcmc(x), prob = 0.89)
+})
+
+# Calcular la media de los parámetros
+means <- apply(posterior_df, 2, mean)
+
+# Preparar los datos para ggplot2
+plot_data <- data.frame(
+  parameter = factor(1:ncol(posterior_df), labels = paste0("alpha[", 1:ncol(posterior_df), "]")),
+  mean = means,
+  hdi_lower = hdi[1, ],
+  hdi_upper = hdi[2, ]
+)
+
+# Paso 2: Crear el gráfico forest plot
+
+library(ggplot2)
+
+ggplot(plot_data, aes(x = parameter, y = mean)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = hdi_lower, ymax = hdi_upper), width = 0.2) +
+  coord_flip() +  # Girar el gráfico para que sea horizontal
+  labs(x = "", y = "days_to_adoption") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 10)
+  )
+```
+Y vemos que, en efecto, los días de diferencia entre razas son menores a los tiempos de espera considerando la variable de color.
+
+Edades
+
+Intentamos realizar un ejemplo con edades; sin embargo, al manipular los datos, nos dimos cuenta de que al parecer hay un error de captura en la variable intake_age, creemos que algunos datos pudieron haberse capturado cómo meses y otros en años.
+
+```{r}
+mese_anios <- AustinCats %>%
+    mutate(anios_calculado = round(intake_age / 12, 0)) %>%
+    select(intake_age, anios_calculado,id_pelaje) %>%
+    group_by(anios_calculado) %>%
+    summarize(n_gatos = n(), num_gatos_negro = sum(id_pelaje == 1, na.rm = TRUE)) %>%
+    mutate(pct_muestra = round(cumsum(n_gatos) / sum(n_gatos) * 100, 1)) |>
+    mutate(pct_g_negros=round(num_gatos_negro/2965,1)*100)
+
+mese_anios
+```
+
+Donde entre 0-1 años se concentra el 80% de los gatos totales, y 90% de los gatos negros.
+
+
+
+# Conclusiones
+
+Como pudimos ver para el modelo sin datos censurados, los gatos de pelaje negro tienen tiempos de espera para ser adoptados más largos que el resto.
+El modelo con datos censurados, nos mostró el mismo comportamiento, pero nos da una predicción más confiable al no tener el sesgo de estar mirando solo los tiempos para los gatos que sí fueron adoptados y, en cambio, también ver que hubiera pasado con su adopción si otro evento no hubiera sucedido antes.
+
+El tercer modelo, que además de tomar en cuenta los datos censurados añade la variable de raza, nos muestra el mismo comportamiento para el color, sin embargo, nos ayudó a visualizar que, al menos para los gatos, la raza no es un factor tan relevante o discriminatorio en las adopciones.
